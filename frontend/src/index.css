@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-plus: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Playfair Display", serif;
+  --font-salena: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-brand-primary: #0065a2;
+  --color-brand-secondary: #00cdac;
+  --color-brand-accent: #ffa23a;
+  --color-brand-berry: #c05780;
+  
+  --color-box-yellow: #ffd872;
+  --color-box-pink: #f2d4cc;
+  --color-done-green: #c6e9c8;
+  --color-timeline-text: #718804;
+}
+
+@layer base {
+  body {
+    @apply font-plus bg-white text-black selection:bg-brand-primary/30;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight text-black;
+  }
+
+  .font-salena {
+    @apply font-salena;
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.glass-pane {
+  @apply bg-[var(--color-box-yellow)] rounded-[40px] p-8 shadow-[0_8px_32px_rgba(0,0,0,0.05)] border-2 border-[#8bb7df] transition-all duration-500;
+}
+
+.glass-pane-pink {
+  @apply bg-[var(--color-box-pink)] rounded-[40px] p-8 shadow-[0_8px_32px_rgba(0,0,0,0.05)] border-2 border-[#8bb7df] transition-all duration-500;
+}
+
+.input-field {
+  @apply w-full px-8 py-5 bg-white border-2 border-[#8bb7df] rounded-3xl focus:border-brand-primary focus:bg-white focus:outline-none transition-all shadow-sm font-medium placeholder:text-zinc-400 text-black;
+}
+
+.btn-primary {
+  @apply relative overflow-hidden bg-brand-primary text-white px-10 py-5 rounded-3xl font-black active:scale-95 transition-all shadow-xl shadow-brand-primary/25 hover:shadow-brand-primary/40 hover:-translate-y-1;
+}
+
+.btn-secondary {
+  @apply bg-brand-secondary text-white px-10 py-5 rounded-3xl font-bold active:scale-95 transition-all shadow-xl shadow-brand-secondary/20 hover:opacity-90;
+}
+
+.btn-accent {
+  @apply bg-brand-accent text-white px-10 py-5 rounded-3xl font-bold active:scale-95 transition-all shadow-xl shadow-brand-accent/20 hover:opacity-90;
+}
+
+.btn-berry {
+  @apply bg-brand-berry text-white px-10 py-5 rounded-3xl font-bold active:scale-95 transition-all shadow-xl shadow-brand-berry/20 hover:opacity-90;
+}
+
+.btn-ghost {
+  @apply bg-white text-black px-6 py-4 rounded-3xl font-bold hover:bg-zinc-50 transition-all border-2 border-[#8bb7df];
+}
+
+.step-indicator {
+  @apply w-12 h-12 rounded-2xl flex items-center justify-center font-black transition-all border-4 border-[#8bb7df];
+}
+
+.card-vibrant {
+  @apply relative p-8 rounded-[40px] bg-gradient-to-br from-brand-primary to-brand-secondary text-white shadow-2xl border-2 border-[#8bb7df];
+}
