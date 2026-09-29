@@ -1,0 +1,19 @@
+# Runtime dependencies for `core` + `fastapi_backend`.
+# Install with:  pip install -r requirements.txt
+
+# --- Web layer ---
+fastapi>=0.115
+uvicorn[standard]>=0.30
+
+# --- Config & HTTP ---
+pydantic>=2.7
+pydantic-settings>=2.3
+httpx>=0.27
+
+# --- AI provider SDKs ---
+google-genai>=1.30
+openai>=1.40
+groq>=0.11
+
+# --- Document export ---
+python-docx>=1.1
