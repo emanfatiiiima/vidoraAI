@@ -158,6 +158,31 @@ class VideoResponse(ApiModel):
     status: str
 
 
+# ---------------------------------------------------------------------- #
+# Project export (Step 8)
+# ---------------------------------------------------------------------- #
+class ProjectSceneIn(ApiModel):
+    # Matches the scene objects kept by the frontend; extra fields are ignored.
+    text: str = ""
+    prompt: str = ""
+    selected_image: str | None = None
+    video_url: str | None = None
+
+
+class ProjectExportRequest(ApiModel):
+    niche: str = ""
+    style: str = ""
+    duration: str = ""
+    aspect_ratio: str = ""
+    scene_count: int | None = None
+    topic: str = ""
+    script: str = ""
+    summary: str = ""
+    audio_url: str | None = None
+    final_video_url: str | None = None
+    scenes: list[ProjectSceneIn] = Field(default_factory=list)
+
+
 class HealthResponse(ApiModel):
     status: str
     llm_providers: list[str]

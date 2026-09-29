@@ -11,7 +11,7 @@ interface Step3Props {
   topic: string;
   style: string;
   duration: string;
-  onNext: (script: string) => void;
+  onNext: (script: string, summary: string) => void;
   initialScript?: string;
   key?: string;
 }
@@ -170,7 +170,7 @@ export default function Step3_Script({ niche, topic, style, duration, onNext, in
           <motion.button
             whileHover={{ scale: 1.05, y: -5 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => onNext(script)}
+            onClick={() => onNext(script, summary)}
             className="w-full py-12 btn-primary !rounded-[40px] shadow-2xl flex items-center justify-center gap-4 transition-all"
           >
             <span className="text-2xl font-black tracking-tighter uppercase">PROCEED TO AUDIO</span>

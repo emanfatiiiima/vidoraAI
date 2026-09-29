@@ -1,14 +1,38 @@
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "motion/react";
-import { Download, Youtube, Share, Sparkles, Check, Play, Film, Award } from "lucide-react";
+import { Download, Youtube, Share, Sparkles, Check, Play, Film, Award, Loader2 } from "lucide-react";
+import { saveAs } from "file-saver";
 import { cn } from "../../lib/utils";
+import { downloadProjectPackage, type ProjectExport } from "../../services/api";
 
 interface Step9Props {
   videoUrl: string;
   onReset: () => void;
+  /** All data from previous steps, packaged into the downloadable ZIP. */
+  project: ProjectExport | null;
 }
 
-export default function Step9_Download({ videoUrl, onReset }: Step9Props) {
+export default function Step9_Download({ videoUrl, onReset, project }: Step9Props) {
+  const [isPackaging, setIsPackaging] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  // The backend collects every asset into one ZIP (core/services/project_export.py).
+  const handleDownload = async () => {
+    if (!project || isPackaging) return;
+    setIsPackaging(true);
+    setDownloadError(null);
+    try {
+      const blob = await downloadProjectPackage(project);
+      const name = project.topic.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 50);
+      saveAs(blob, `${name || "vidora_project"}.zip`);
+    } catch (e) {
+      console.error("Download Error:", e);
+      setDownloadError("Packaging failed. Please try again.");
+    } finally {
+      setIsPackaging(false);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto py-12">
       <div className="text-center mb-16">
@@ -65,14 +89,17 @@ export default function Step9_Download({ videoUrl, onReset }: Step9Props) {
               <h3 className="text-xl font-black text-white uppercase tracking-widest mb-6 italic">Distribute</h3>
               
               <div className="space-y-4">
-                 <a 
-                    href={videoUrl} 
-                    download="My_Visual_Narrative.mp4"
-                    className="w-full py-5 bg-white text-zinc-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center justify-center space-x-3 shadow-xl"
+                 <button 
+                    onClick={handleDownload}
+                    disabled={!project || isPackaging}
+                    className="w-full py-5 bg-white text-zinc-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center justify-center space-x-3 shadow-xl disabled:opacity-60 disabled:hover:scale-100"
                  >
-                    <Download className="w-5 h-5" />
-                    <span>Download Master</span>
-                 </a>
+                    {isPackaging ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                    <span>{isPackaging ? "Packaging..." : "Download Master"}</span>
+                 </button>
+                 {downloadError && (
+                    <p className="text-[10px] font-black text-white uppercase tracking-widest text-center">{downloadError}</p>
+                 )}
 
                  <button 
                     className="w-full py-5 bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest opacity-50 cursor-not-allowed border border-white/10 flex items-center justify-center space-x-3 group"

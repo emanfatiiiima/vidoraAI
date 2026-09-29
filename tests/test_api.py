@@ -82,3 +82,38 @@ def test_script_export_docx(client) -> None:
     assert response.status_code == 200
     assert "wordprocessingml" in response.headers["content-type"]
 
+
+def test_project_export_zip(client) -> None:
+    import base64
+    import io
+    import zipfile
+
+    from openpyxl import load_workbook
+
+    png = "data:image/png;base64," + base64.b64encode(b"\x89PNG fake").decode()
+    mp4 = "data:video/mp4;base64," + base64.b64encode(b"fake mp4").decode()
+    response = client.post("/api/export/project", json={
+        "niche": "AI", "topic": "The AI Revolution!", "script": "Hello.", "summary": "Hi.",
+        "style": "Cinematic", "duration": "1 minutes", "aspectRatio": "16:9", "sceneCount": 2,
+        "audioUrl": "http://127.0.0.1:1/unreachable.mp3",  # fails -> reported, not fatal
+        "finalVideoUrl": mp4,
+        "scenes": [
+            {"id": 1, "text": "Scene one", "prompt": "p1", "selectedImage": png, "videoUrl": mp4},
+            {"id": 2, "text": "Scene two", "prompt": "p2", "selectedImage": png, "videoUrl": mp4},
+        ],
+    })
+    assert response.status_code == 200
+    assert 'filename="The_AI_Revolution.zip"' in response.headers["content-disposition"]
+
+    archive = zipfile.ZipFile(io.BytesIO(response.content))
+    assert sorted(archive.namelist()) == [
+        "final_video.mp4", "images/img1.png", "images/img2.png",
+        "project_details.xlsx", "script.txt", "videos/vid1.mp4", "videos/vid2.mp4",
+    ]
+    assert archive.read("images/img1.png") == b"\x89PNG fake"
+
+    workbook = load_workbook(io.BytesIO(archive.read("project_details.xlsx")))
+    assert workbook.sheetnames == ["Overview", "Scenes", "Files"]
+    assert workbook["Scenes"]["C2"].value == "p1"
+    statuses = {row[0]: row[1] for row in workbook["Files"].iter_rows(min_row=2, values_only=True)}
+    assert statuses["audio/narration.mp3"].startswith("missing")

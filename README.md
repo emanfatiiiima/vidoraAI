@@ -12,7 +12,7 @@ It takes you from a niche idea to a finished video through a guided pipeline:
 | 5 | Visuals    | Script split into scenes, image prompt + image per scene       | LLM, Gemini / DALL-E / Pollinations |
 | 6 | Motion     | Scene image → video clip *(simulated)*                         | placeholder                    |
 | 7 | Finalize   | Stitch clips + narration into the final video *(simulated)*    | placeholder                    |
-| 8 | Download   | Preview and download the result                                | —                              |
+| 8 | Download   | Download a ZIP with details (Excel), script, images, clips, audio & final video | openpyxl        |
 
 ---
 
@@ -63,6 +63,7 @@ vidoraAI/
 | `services/scenes.py`      | Step 5 – scene splitting + image prompts                          |
 | `services/images.py`      | Step 5 – image generation with fallbacks                          |
 | `services/video.py`       | Steps 6–7 – clip generation + compilation (**simulated**)         |
+| `services/project_export.py` | Step 8 – builds the project ZIP package                        |
 | `utils/json_parser.py`    | Robust parsing of JSON returned by LLMs                           |
 | `container.py`            | `build_services()` – wires settings, SDK clients and services     |
 
@@ -111,6 +112,7 @@ All endpoints are under `/api`. Interactive docs: **http://localhost:8000/docs**
 | POST   | `/generate-image`    | `{prompt}`                                    | `{url}`                         |
 | POST   | `/generate-video`    | `{imageUrl, prompt}`                          | `{url, status}`                 |
 | POST   | `/compile-video`     | `{scenes: [{id, videoUrl}], audioUrl}`        | `{url, status}`                 |
+| POST   | `/export/project`    | All project data (inputs, topic, script, summary, audioUrl, finalVideoUrl, scenes) | ZIP download |
 
 **Errors** always look like this:
 
@@ -126,6 +128,22 @@ All endpoints are under `/api`. Interactive docs: **http://localhost:8000/docs**
 | `external_service_error`  | 502 / 429 | Third-party API failed (429 = rate limited) |
 | `provider_not_configured` | 503  | Required API key missing                        |
 | `all_providers_failed`    | 503  | Every LLM provider failed / none configured     |
+
+### Download package (Step 8)
+
+The **Download Master** button produces `<topic>.zip`:
+
+```
+project_details.xlsx   # sheets: Overview (niche, topic, style, script…), Scenes (text + image prompts), Files (status of each file)
+script.txt             # topic, summary and full script
+images/img1.jpg …      # scene images
+videos/vid1.mp4 …      # scene clips
+audio/narration.mp3    # TTS narration
+final_video.mp4        # compiled video
+```
+
+If one media file can't be downloaded, the ZIP is still created and that file is marked
+`missing` in the **Files** sheet.
 
 ---
 

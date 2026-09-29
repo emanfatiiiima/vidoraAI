@@ -21,8 +21,9 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
-PLACEHOLDER_CLIP_URL = "https://v.liquidpro.io/static/motion_sample_1.mp4"
-PLACEHOLDER_FINAL_URL = "https://v.liquidpro.io/static/final_demo_assembly.mp4"
+# Public-domain (CC0) sample clip from MDN, used until real generation is wired in.
+PLACEHOLDER_CLIP_URL = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+PLACEHOLDER_FINAL_URL = PLACEHOLDER_CLIP_URL
 
 
 @dataclass(frozen=True, slots=True)

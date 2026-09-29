@@ -18,6 +18,7 @@ from core.config import Settings
 from core.llm import LLMProvider, LLMRequest, LLMRouter
 from core.services import (
     ImageService,
+    ProjectExporter,
     ResearchService,
     SceneService,
     ScriptService,
@@ -65,6 +66,7 @@ def services(fake_llm: FakeProvider) -> Services:
         tts=TextToSpeechService(http, api_key=None),
         images=ImageService(gemini=None, gemini_model="", openai=None, openai_model=""),
         video=VideoService(clip_delay_seconds=0, compile_delay_seconds=0),
+        project_export=ProjectExporter(http),
     )
 
 

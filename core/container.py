@@ -22,6 +22,7 @@ from core.llm import LLMProvider, LLMRouter
 from core.llm.providers import GeminiProvider, GroqProvider, OpenAIProvider
 from core.services import (
     ImageService,
+    ProjectExporter,
     ResearchService,
     SceneService,
     ScriptService,
@@ -45,6 +46,7 @@ class Services:
     tts: TextToSpeechService
     images: ImageService
     video: VideoService
+    project_export: ProjectExporter
 
 
 def build_services(settings: Settings, http: httpx.AsyncClient) -> Services:
@@ -98,4 +100,5 @@ def build_services(settings: Settings, http: httpx.AsyncClient) -> Services:
             openai_model=settings.openai_image_model,
         ),
         video=VideoService(),
+        project_export=ProjectExporter(http),
     )

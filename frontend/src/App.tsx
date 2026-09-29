@@ -46,6 +46,7 @@ export default function App() {
   const [topics, setTopics] = useState<{ basic: string[], unique: string[], trending: string[] } | null>(null);
   const [selectedTopic, setSelectedTopic] = useState("");
   const [script, setScript] = useState("");
+  const [summary, setSummary] = useState("");
   const [audioUrl, setAudioUrl] = useState("");
   const [scenes, setScenes] = useState<any[] | null>(null);
   const [finalVideoUrl, setFinalVideoUrl] = useState("");
@@ -63,6 +64,7 @@ export default function App() {
     setTopics(null);
     setSelectedTopic("");
     setScript("");
+    setSummary("");
     setAudioUrl("");
     setScenes(null);
     setFinalVideoUrl("");
@@ -237,8 +239,9 @@ export default function App() {
                       style={inputs.style}
                       duration={`${inputs.duration} ${inputs.durationUnit}`}
                       initialScript={script}
-                      onNext={(s) => {
+                      onNext={(s, sum) => {
                         setScript(s);
+                        setSummary(sum);
                         setCurrentStep(4);
                       }}
                     />
@@ -289,6 +292,19 @@ export default function App() {
                     <Step9_Download 
                       videoUrl={finalVideoUrl}
                       onReset={resetApp}
+                      project={inputs ? {
+                        niche: inputs.niche,
+                        style: inputs.style,
+                        duration: `${inputs.duration} ${inputs.durationUnit}`,
+                        aspectRatio: inputs.aspectRatio,
+                        sceneCount: inputs.sceneCount,
+                        topic: selectedTopic,
+                        script,
+                        summary,
+                        audioUrl,
+                        finalVideoUrl,
+                        scenes: scenes || [],
+                      } : null}
                     />
                   )}
                 </AnimatePresence>

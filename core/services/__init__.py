@@ -11,11 +11,13 @@ Feature services - one module per step of the video pipeline.
 | 5    | SceneService           | scenes.py    |
 | 5    | ImageService           | images.py    |
 | 6-7  | VideoService           | video.py     |
+| 8    | ProjectExporter        | project_export.py |
 """
 
 from core.services.audio import TextToSpeechService
 from core.services.export import ExportFormat, export_script
 from core.services.images import ImageService
+from core.services.project_export import ProjectData, ProjectExporter, ProjectScene
 from core.services.research import ResearchService
 from core.services.scenes import SceneService
 from core.services.scripts import ScriptService
@@ -25,6 +27,9 @@ from core.services.video import VideoResult, VideoService
 __all__ = [
     "ExportFormat",
     "ImageService",
+    "ProjectData",
+    "ProjectExporter",
+    "ProjectScene",
     "ResearchService",
     "SceneService",
     "ScriptService",

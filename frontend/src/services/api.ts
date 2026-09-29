@@ -183,3 +183,35 @@ export async function compileVideo(
   const data = await post<{ url: string }>("/compile-video", { scenes, audioUrl });
   return data.url;
 }
+
+// ---------------------------------------------------------------------------
+// Step 8 - Download
+// ---------------------------------------------------------------------------
+
+/** Everything produced by the pipeline, sent to the backend to build the ZIP. */
+export interface ProjectExport {
+  niche: string;
+  style: string;
+  duration: string;
+  aspectRatio: string;
+  sceneCount: number;
+  topic: string;
+  script: string;
+  summary: string;
+  audioUrl: string;
+  finalVideoUrl: string;
+  scenes: { text: string; prompt?: string; selectedImage?: string | null; videoUrl?: string | null }[];
+}
+
+/**
+ * Build the project ZIP: project_details.xlsx, script.txt, images/img1..N,
+ * videos/vid1..N, audio/narration and final_video (see core/services/project_export.py).
+ */
+export async function downloadProjectPackage(project: ProjectExport): Promise<Blob> {
+  try {
+    const res = await http.post<Blob>("/export/project", project, { responseType: "blob" });
+    return res.data;
+  } catch (error) {
+    throw toApiError(error);
+  }
+}
