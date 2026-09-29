@@ -12,7 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 # Project root = the folder that contains ``core/``, ``fastapi_backend/`` and ``frontend/``.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -57,6 +57,25 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     # Built frontend (``npm run build``) served by FastAPI in production.
     frontend_dist_dir: Path = PROJECT_ROOT / "frontend" / "dist"
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Make the project's ``.env`` file take priority over OS environment variables.
+
+        Editors such as VS Code inject ``.env`` into new terminals as real
+        environment variables. Those copies go stale when ``.env`` is edited,
+        and would otherwise silently override the fresh values in the file
+        (e.g. an old API key -> "Invalid API key"). OS variables still apply
+        to any key that is not present in ``.env`` (e.g. in production).
+        """
+        return init_settings, dotenv_settings, env_settings, file_secret_settings
 
     # ------------------------------------------------------------------ #
     # Validators / helpers
