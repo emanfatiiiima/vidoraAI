@@ -6,6 +6,10 @@ Providers are tried in this order:
 1. Gemini native image generation
 2. OpenAI DALL-E 3
 3. Pollinations.ai (free, no key needed) - always available as a last resort
+
+Images are returned as ``data:`` URIs whenever possible, so the browser can show
+them without hitting the image host again (free hosts rate-limit parallel
+requests) and the project export never depends on a link that may expire.
 """
 
 from __future__ import annotations
@@ -15,9 +19,12 @@ import logging
 import random
 from urllib.parse import quote, urlencode
 
+import httpx
 from google import genai
 from google.genai import types as genai_types
 from openai import AsyncOpenAI
+
+from core.utils import fetch_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +39,13 @@ class ImageService:
     def __init__(
         self,
         *,
+        http: httpx.AsyncClient,
         gemini: genai.Client | None,
         gemini_model: str,
         openai: AsyncOpenAI | None,
         openai_model: str,
     ) -> None:
+        self._http = http
         self._gemini = gemini
         self._gemini_model = gemini_model
         self._openai = openai
@@ -53,7 +62,22 @@ class ImageService:
                 return url
 
         logger.info("Using Pollinations flux engine for scene image fallback.")
-        return self._pollinations_url(prompt)
+        return await self._try_pollinations(prompt)
+
+    async def _try_pollinations(self, prompt: str) -> str:
+        """Download the Pollinations image server-side and return it as a ``data:`` URI.
+
+        If the download keeps failing, the plain URL is returned so the browser
+        can still try to load it itself.
+        """
+        url = self._pollinations_url(prompt)
+        try:
+            content, content_type = await fetch_bytes(self._http, url)
+        except httpx.HTTPError as exc:
+            logger.warning("Pollinations download failed, returning URL instead: %s", exc)
+            return url
+        encoded = base64.b64encode(content).decode("ascii")
+        return f"data:{content_type or 'image/jpeg'};base64,{encoded}"
 
     async def _try_gemini(self, prompt: str) -> str | None:
         """Gemini native image generation -> ``data:`` URI, or ``None``."""

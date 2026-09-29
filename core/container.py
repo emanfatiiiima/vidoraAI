@@ -94,6 +94,7 @@ def build_services(settings: Settings, http: httpx.AsyncClient) -> Services:
         scenes=SceneService(llm),
         tts=TextToSpeechService(http, settings.unreal_speech_api_key),
         images=ImageService(
+            http=http,
             gemini=gemini,
             gemini_model=settings.gemini_image_model,
             openai=openai,

@@ -55,7 +55,8 @@ def fake_llm() -> FakeProvider:
 def services(fake_llm: FakeProvider) -> Services:
     """A Services bundle wired to the fake LLM and with no external API keys."""
     llm = LLMRouter([fake_llm])
-    http = httpx.AsyncClient()
+    # Offline HTTP: every outbound request gets a 404, so tests never hit the network.
+    http = httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(404)))
     research = ResearchService(http, serpapi_key=None)
     return Services(
         llm=llm,
@@ -64,7 +65,7 @@ def services(fake_llm: FakeProvider) -> Services:
         scripts=ScriptService(llm),
         scenes=SceneService(llm),
         tts=TextToSpeechService(http, api_key=None),
-        images=ImageService(gemini=None, gemini_model="", openai=None, openai_model=""),
+        images=ImageService(http=http, gemini=None, gemini_model="", openai=None, openai_model=""),
         video=VideoService(clip_delay_seconds=0, compile_delay_seconds=0),
         project_export=ProjectExporter(http),
     )

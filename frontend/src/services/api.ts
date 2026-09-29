@@ -188,6 +188,9 @@ export async function compileVideo(
 // Step 8 - Download
 // ---------------------------------------------------------------------------
 
+/** Upper bound for building the ZIP (the backend downloads every media file). */
+const EXPORT_TIMEOUT_MS = 5 * 60 * 1000;
+
 /** Everything produced by the pipeline, sent to the backend to build the ZIP. */
 export interface ProjectExport {
   niche: string;
@@ -209,7 +212,11 @@ export interface ProjectExport {
  */
 export async function downloadProjectPackage(project: ProjectExport): Promise<Blob> {
   try {
-    const res = await http.post<Blob>("/export/project", project, { responseType: "blob" });
+    const res = await http.post<Blob>("/export/project", project, {
+      responseType: "blob",
+      // Never leave the button stuck on "Packaging..." if the connection drops.
+      timeout: EXPORT_TIMEOUT_MS,
+    });
     return res.data;
   } catch (error) {
     throw toApiError(error);

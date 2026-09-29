@@ -59,7 +59,7 @@ def test_tts_without_key_returns_503(client) -> None:
     assert response.json()["error"] == "UNREAL_SPEECH_API_KEY not configured"
 
 
-def test_image_falls_back_to_pollinations(client) -> None:
+def test_image_falls_back_to_pollinations_url_when_download_fails(client) -> None:
     response = client.post("/api/generate-image", json={"prompt": "a red fox"})
     assert response.json()["url"].startswith("https://image.pollinations.ai/prompt/a%20red%20fox?")
 

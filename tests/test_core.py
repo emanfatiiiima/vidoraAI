@@ -97,3 +97,43 @@ def test_export_txt_and_docx() -> None:
     docx_bytes = export_script("My Topic", "line 1", ExportFormat.DOCX)
     assert docx_bytes[:2] == b"PK"  # .docx files are zip archives
 
+
+# ---------------------------------------------------------------------- #
+# Resilient downloads
+# ---------------------------------------------------------------------- #
+def test_fetch_bytes_retries_rate_limits() -> None:
+    import httpx
+
+    from core.utils import fetch_bytes
+
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if len(calls) < 3:
+            return httpx.Response(402)
+        return httpx.Response(200, content=b"img", headers={"content-type": "image/jpeg"})
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            return await fetch_bytes(http, "https://example.com/x", backoff_seconds=0)
+
+    assert asyncio.run(run()) == (b"img", "image/jpeg")
+    assert len(calls) == 3
+
+
+def test_image_service_returns_data_uri_from_pollinations() -> None:
+    import httpx
+
+    from core.services import ImageService
+
+    transport = httpx.MockTransport(
+        lambda r: httpx.Response(200, content=b"jpg", headers={"content-type": "image/jpeg"})
+    )
+
+    async def run():
+        async with httpx.AsyncClient(transport=transport) as http:
+            service = ImageService(http=http, gemini=None, gemini_model="", openai=None, openai_model="")
+            return await service.generate("a fox")
+
+    assert asyncio.run(run()) == "data:image/jpeg;base64,anBn"

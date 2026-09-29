@@ -25,17 +25,24 @@ import logging
 import mimetypes
 import re
 import zipfile
+from collections import defaultdict
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 import httpx
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 from openpyxl.worksheet.worksheet import Worksheet
 
+from core.utils import fetch_bytes
+
 logger = logging.getLogger(__name__)
 
-# Max simultaneous media downloads (keeps us polite to image/video hosts).
-MAX_CONCURRENT_DOWNLOADS = 4
+# Downloads run in parallel across hosts but one at a time per host: free hosts
+# (e.g. Pollinations) answer parallel requests with 402/429.
+MAX_CONCURRENT_PER_HOST = 1
+# Hard limit per file (including retries) so the export can never hang.
+ASSET_TIMEOUT_SECONDS = 90.0
 DETAILS_FILENAME = "project_details.xlsx"
 SCRIPT_FILENAME = "script.txt"
 
@@ -121,13 +128,15 @@ class ProjectExporter:
         return buffer.getvalue()
 
     async def _download_all(self, assets: list[_Asset]) -> dict[str, bytes]:
-        """Fetch every asset concurrently. The same URL is only downloaded once."""
-        semaphore = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)
+        """Fetch every asset. The same URL is only downloaded once."""
+        host_locks: defaultdict[str, asyncio.Semaphore] = defaultdict(
+            lambda: asyncio.Semaphore(MAX_CONCURRENT_PER_HOST)
+        )
         cache: dict[str, asyncio.Task[tuple[bytes, str | None]]] = {}
 
         async def fetch(url: str) -> tuple[bytes, str | None]:
-            async with semaphore:
-                return await self._fetch(url)
+            async with host_locks[urlsplit(url).netloc]:
+                return await asyncio.wait_for(self._fetch(url), ASSET_TIMEOUT_SECONDS)
 
         for asset in assets:
             if asset.url not in cache:
@@ -139,7 +148,7 @@ class ProjectExporter:
                 content, content_type = await cache[asset.url]
             except Exception as exc:  # noqa: BLE001 - one bad file must not break the export
                 logger.warning("Could not download %s (%s): %s", asset.name, asset.url[:80], exc)
-                asset.error = str(exc) or type(exc).__name__
+                asset.error = _short_error(exc)
                 asset.archive_path = asset.name + _DEFAULT_EXTENSION[asset.kind]
                 continue
             asset.archive_path = asset.name + _extension_for(content_type, asset.kind)
@@ -154,10 +163,7 @@ class ProjectExporter:
                 raise ValueError("Unsupported data URI")
             return base64.b64decode(match.group("data")), match.group("mime")
 
-        response = await self._http.get(url)
-        response.raise_for_status()
-        content_type = response.headers.get("content-type", "").split(";")[0].strip() or None
-        return response.content, content_type
+        return await fetch_bytes(self._http, url)
 
 
 # ---------------------------------------------------------------------- #
@@ -177,6 +183,15 @@ def _collect_assets(project: ProjectData) -> list[_Asset]:
     if project.final_video_url:
         assets.append(_Asset("video", "final_video", project.final_video_url))
     return assets
+
+
+def _short_error(exc: Exception) -> str:
+    """One-line, human-readable reason for a failed download (for the Files sheet)."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"HTTP {exc.response.status_code} {exc.response.reason_phrase}"
+    if isinstance(exc, (TimeoutError, httpx.TimeoutException)):
+        return "timed out"
+    return str(exc).splitlines()[0] if str(exc) else type(exc).__name__
 
 
 def _extension_for(content_type: str | None, kind: str) -> str:
