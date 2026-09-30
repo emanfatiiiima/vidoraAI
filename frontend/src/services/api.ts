@@ -72,21 +72,24 @@ async function post<T>(url: string, body: unknown): Promise<T> {
 // Step 2 - Topics
 // ---------------------------------------------------------------------------
 
+/** Text AI the user can pick. The backend uses only that one (no fallback). */
+export type AIProvider = "gemini" | "openai" | "groq";
+
 /** 10 evergreen topic ideas for a niche. */
-export async function fetchBasicTopics(niche: string, duration: string): Promise<string[]> {
-  const data = await post<{ topics: string[] }>("/topics/basic", { niche, duration });
+export async function fetchBasicTopics(niche: string, duration: string, provider?: AIProvider): Promise<string[]> {
+  const data = await post<{ topics: string[] }>("/topics/basic", { niche, duration, provider });
   return data.topics;
 }
 
 /** 10 creative, viral-style topic ideas. */
-export async function fetchUniqueTopics(niche: string): Promise<string[]> {
-  const data = await post<{ topics: string[] }>("/topics/unique", { niche });
+export async function fetchUniqueTopics(niche: string, provider?: AIProvider): Promise<string[]> {
+  const data = await post<{ topics: string[] }>("/topics/unique", { niche, provider });
   return data.topics;
 }
 
 /** 10 topic ideas based on live news + Google Trends (research happens server-side). */
-export async function fetchTrendingTopics(niche: string): Promise<string[]> {
-  const data = await post<{ topics: string[] }>("/topics/trending", { niche });
+export async function fetchTrendingTopics(niche: string, provider?: AIProvider): Promise<string[]> {
+  const data = await post<{ topics: string[] }>("/topics/trending", { niche, provider });
   return data.topics;
 }
 

@@ -6,7 +6,12 @@ import asyncio
 
 import pytest
 
-from core.exceptions import AllProvidersFailedError, InvalidAIResponseError
+from core.exceptions import (
+    AllProvidersFailedError,
+    InvalidAIResponseError,
+    ProviderFailedError,
+    ProviderNotConfiguredError,
+)
 from core.llm import LLMRouter
 from core.services.export import ExportFormat, export_script
 from core.services.scenes import split_script_evenly
@@ -53,6 +58,28 @@ def test_router_raises_when_all_providers_fail() -> None:
 def test_router_raises_when_no_provider_configured() -> None:
     with pytest.raises(AllProvidersFailedError):
         asyncio.run(LLMRouter([]).generate("hi"))
+
+
+def test_router_uses_only_the_selected_provider() -> None:
+    first = FakeProvider("first", ["from first"])
+    second = FakeProvider("second", ["from second"])
+    result = asyncio.run(LLMRouter([first, second]).generate("hi", provider="second"))
+    assert (result.text, result.provider) == ("from second", "second")
+    assert first.requests == []
+
+
+def test_router_does_not_fall_back_from_selected_provider() -> None:
+    first = FakeProvider("first", ["hello"])
+    second = FakeProvider("second", [RuntimeError("quota")])
+    with pytest.raises(ProviderFailedError) as info:
+        asyncio.run(LLMRouter([first, second]).generate("hi", provider="second"))
+    assert info.value.details["provider"] == "second"
+    assert first.requests == []
+
+
+def test_router_rejects_unconfigured_selected_provider() -> None:
+    with pytest.raises(ProviderNotConfiguredError):
+        asyncio.run(LLMRouter([FakeProvider("a")]).generate("hi", provider="b"))
 
 
 # ---------------------------------------------------------------------- #

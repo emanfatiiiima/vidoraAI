@@ -41,6 +41,15 @@ class AllProvidersFailedError(CoreError):
     code = "all_providers_failed"
 
 
+class ProviderFailedError(CoreError):
+    """The AI provider the user explicitly chose failed (no fallback is tried).
+
+    ``details["provider"]`` holds the provider's name so the UI can disable it.
+    """
+
+    code = "provider_failed"
+
+
 class InvalidAIResponseError(CoreError):
     """The AI answered, but not in the format we asked for (e.g. bad JSON)."""
 

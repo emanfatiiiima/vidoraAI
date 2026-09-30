@@ -22,7 +22,7 @@ router = APIRouter(tags=["topics"])
 async def basic_topics(body: BasicTopicsRequest, services: ServicesDep) -> TopicsResponse:
     """10 evergreen topic ideas for the niche."""
     topics = await services.topics.generate_basic(
-        body.niche, body.duration, body.audience or DEFAULT_AUDIENCE
+        body.niche, body.duration, body.audience or DEFAULT_AUDIENCE, body.provider
     )
     return TopicsResponse(topics=topics)
 
@@ -30,13 +30,13 @@ async def basic_topics(body: BasicTopicsRequest, services: ServicesDep) -> Topic
 @router.post("/topics/unique", response_model=TopicsResponse)
 async def unique_topics(body: NicheRequest, services: ServicesDep) -> TopicsResponse:
     """10 creative, viral-style topic ideas."""
-    return TopicsResponse(topics=await services.topics.generate_unique(body.niche))
+    return TopicsResponse(topics=await services.topics.generate_unique(body.niche, body.provider))
 
 
 @router.post("/topics/trending", response_model=TopicsResponse)
 async def trending_topics(body: NicheRequest, services: ServicesDep) -> TopicsResponse:
     """10 topic ideas grounded in live news headlines and Google Trends."""
-    return TopicsResponse(topics=await services.topics.generate_trending(body.niche))
+    return TopicsResponse(topics=await services.topics.generate_trending(body.niche, body.provider))
 
 
 @router.get("/trends")

@@ -8,7 +8,7 @@ snake_case (``scene_count``). This is handled by :class:`ApiModel`.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
@@ -51,14 +51,20 @@ class GenerateResponse(ApiModel):
 # ---------------------------------------------------------------------- #
 # Topics & research
 # ---------------------------------------------------------------------- #
+#: Text providers the user can pick in the UI. ``None`` = automatic fallback.
+LLMProviderName = Literal["gemini", "openai", "groq"]
+
+
 class BasicTopicsRequest(ApiModel):
     niche: str = Field(min_length=1)
     duration: str
     audience: str | None = None
+    provider: LLMProviderName | None = None
 
 
 class NicheRequest(ApiModel):
     niche: str = Field(min_length=1)
+    provider: LLMProviderName | None = None
 
 
 class TopicsResponse(ApiModel):

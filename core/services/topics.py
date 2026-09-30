@@ -30,33 +30,39 @@ class TopicService:
         self._llm = llm
         self._research = research
 
+    # ``provider`` selects a single LLM provider (no fallback); ``None`` uses the router order.
+
     async def generate_basic(
-        self, niche: str, duration: str, audience: str = DEFAULT_AUDIENCE
+        self,
+        niche: str,
+        duration: str,
+        audience: str = DEFAULT_AUDIENCE,
+        provider: str | None = None,
     ) -> list[str]:
         """Evergreen topic ideas for ``niche``."""
         prompt = prompts.topic_generator_basic(niche, duration, audience)
-        return await self._generate_topic_list(prompt)
+        return await self._generate_topic_list(prompt, provider)
 
-    async def generate_unique(self, niche: str) -> list[str]:
+    async def generate_unique(self, niche: str, provider: str | None = None) -> list[str]:
         """Creative, viral-style topic ideas for ``niche``."""
         prompt = prompts.topic_generator_unique(niche, UNIQUE_TOPIC_CONTEXT)
-        return await self._generate_topic_list(prompt)
+        return await self._generate_topic_list(prompt, provider)
 
-    async def generate_trending(self, niche: str) -> list[str]:
+    async def generate_trending(self, niche: str, provider: str | None = None) -> list[str]:
         """Topic ideas based on live news headlines and trending searches."""
         context = await self._research.build_trend_context(niche)
         prompt = prompts.topic_generator_unique(
             niche, f"Real-time data detected: {context or TRENDING_FALLBACK_CONTEXT}"
         )
-        return await self._generate_topic_list(prompt)
+        return await self._generate_topic_list(prompt, provider)
 
-    async def _generate_topic_list(self, prompt: str) -> list[str]:
+    async def _generate_topic_list(self, prompt: str, provider: str | None) -> list[str]:
         """Ask the LLM for a JSON list of topics and validate the result.
 
         Raises:
             InvalidAIResponseError: the AI did not return a JSON array of strings.
         """
-        response = await self._llm.generate(prompt, json_mode=True)
+        response = await self._llm.generate(prompt, json_mode=True, provider=provider)
         topics = parse_ai_string_list(response.text)
         if topics is None:
             raise InvalidAIResponseError("AI returned invalid topic format.")
