@@ -13,32 +13,13 @@ import Step5_Visuals from "./components/steps/Step5_Visuals";
 import Step7_Videos from "./components/steps/Step7_Videos";
 import Step8_Compile from "./components/steps/Step8_Compile";
 import Step9_Download from "./components/steps/Step9_Download";
-import { Sun, Moon, LogOut, Sparkles } from "lucide-react";
-
-// Placeholder components for new steps
-function StepPlaceholder({ title, onNext }: { title: string, onNext: () => void }) {
-  return (
-    <div className="glass-pane flex flex-col items-center justify-center p-20 py-32 text-center">
-      <div className="w-24 h-24 bg-brand-primary/10 rounded-3xl flex items-center justify-center text-brand-primary mb-8 animate-pulse">
-        <Sparkles className="w-12 h-12" />
-      </div>
-      <h2 className="text-4xl font-black mb-4 uppercase tracking-tighter text-zinc-900">{title} Pipeline</h2>
-      <p className="text-zinc-500 mb-12 max-w-sm font-medium">This architectural module is currently under construction for the next production cycle.</p>
-      <button 
-        onClick={onNext} 
-        className="btn-primary px-12 py-4 text-lg"
-      >
-        BYPASS TO NEXT PHASE
-      </button>
-    </div>
-  );
-}
+import { Sun, Moon, LogOut, Sparkles, ArrowRight } from "lucide-react";
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'login' | 'signup' | 'forgot' | 'home' | 'videogen'>('login');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [user, setUser] = useState<{ email: string } | null>(null);
-  
+
   // App State
   const [currentStep, setCurrentStep] = useState(1);
   const [maxStep, setMaxStep] = useState(1);
@@ -105,102 +86,107 @@ export default function App() {
   if (currentPage === 'forgot') return <ForgotPassword onNavigate={() => setCurrentPage('login')} />;
 
   const BrandLogo = () => (
-    <button onClick={resetApp} className="group flex items-center space-x-3 bg-white/50 backdrop-blur-md px-4 py-2 rounded-2xl hover:bg-white transition-all border border-zinc-200/50">
-      <div className="w-8 h-8 bg-brand-primary rounded-xl flex items-center justify-center overflow-hidden shadow-lg shadow-brand-primary/20 transition-transform group-hover:rotate-12">
+    <button onClick={resetApp} className="group flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-white transition-colors">
+      <div className="w-8 h-8 bg-brand-primary rounded-lg flex items-center justify-center overflow-hidden shadow-sm shadow-brand-primary/20 transition-transform group-hover:rotate-6">
          <div className="scale-60 relative top-1">
             <BearCharacter isCoveringEyes={false} />
          </div>
       </div>
-      <span className="font-black text-xl tracking-tighter text-zinc-900 uppercase">Vidora<span className="text-brand-primary">AI</span></span>
+      <span className="font-extrabold text-lg tracking-tight text-zinc-900">Vidora<span className="text-brand-primary">AI</span></span>
     </button>
   );
 
   return (
     <div className="min-h-screen bg-[#f8f9ff] text-zinc-900 font-plus">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 h-20 bg-white/70 backdrop-blur-xl border-b border-zinc-200/50 z-40 flex items-center justify-between px-8">
+      <header className="fixed top-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-xl border-b border-zinc-200/60 z-40 flex items-center justify-between px-4 sm:px-8">
         <BrandLogo />
 
-        <div className="flex items-center space-x-6">
-          <button 
-            onClick={toggleTheme}
-            className="w-12 h-12 rounded-2xl bg-white shadow-sm border border-zinc-200 flex items-center justify-center text-zinc-600 hover:text-brand-primary hover:border-brand-primary/30 transition-all"
-          >
-            {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+        <div className="flex items-center gap-4">
+          <button onClick={toggleTheme} className="icon-btn" aria-label="Toggle theme">
+            {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
           </button>
-          
-          <div className="h-8 w-[1px] bg-zinc-200" />
-          
-          <div className="flex items-center space-x-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-black text-zinc-900 uppercase tracking-widest">{user?.email.split('@')[0]}</p>
-              <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">{user?.email}</p>
+
+          <div className="h-6 w-px bg-zinc-200" />
+
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-brand-primary/10 text-brand-primary flex items-center justify-center text-sm font-bold uppercase">
+              {user?.email.charAt(0)}
             </div>
-            <button 
-              onClick={logout}
-              className="w-12 h-12 rounded-2xl bg-zinc-100 text-zinc-400 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
-            >
-              <LogOut className="w-5 h-5" />
+            <div className="text-left hidden sm:block leading-tight">
+              <p className="text-sm font-semibold text-zinc-900 capitalize">{user?.email.split('@')[0]}</p>
+              <p className="text-xs text-zinc-400">{user?.email}</p>
+            </div>
+            <button onClick={logout} className="icon-btn hover:!text-red-500 hover:!border-red-200" aria-label="Log out" title="Log out">
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="pt-32 px-4 pb-20 relative">
+      <main className="pt-24 px-4 pb-16 relative">
         <div className="max-w-7xl mx-auto">
           {currentPage === 'home' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-10 pt-12">
-              <motion.button
-                whileHover={{ scale: 1.02, y: -5 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setCurrentPage('videogen')}
-                className="group glass-pane text-left flex flex-col justify-between h-96 relative overflow-hidden"
-              >
-                <div className="absolute -right-10 -top-10 w-40 h-40 bg-black/5 rounded-full blur-3xl transition-all" />
-                
-                <div className="w-20 h-20 bg-black rounded-[28px] flex items-center justify-center text-white mb-8 shadow-2xl font-black text-3xl">
-                  <Sparkles className="w-10 h-10" />
-                </div>
-                <div>
-                  <div className="flex items-center space-x-2 mb-3">
-                    <span className="px-3 py-1 bg-black/10 text-black text-[10px] font-black uppercase tracking-widest rounded-lg">Production Ready</span>
-                  </div>
-                  <h3 className="text-4xl font-black text-black mb-3 tracking-tighter uppercase italic">VideoGen</h3>
-                  <p className="text-black/60 font-medium leading-relaxed">Create viral videos with a guided AI workflow. We handle the trends, the script, and the scenes.</p>
-                </div>
-              </motion.button>
-              
-              <div className="glass-pane-pink border-dashed border-[#8bb7df] flex flex-col justify-center items-center text-center">
-                <div className="w-16 h-16 bg-[#c6e9c8] rounded-2xl flex items-center justify-center text-[#718804] mb-6">
-                  <Sparkles className="w-8 h-8" />
-                </div>
-                <p className="font-black text-black uppercase tracking-[0.2em] text-xs">Audio Studio</p>
-                <p className="text-black/40 text-sm font-bold mt-2 italic">Coming Phase 2</p>
+            <div className="max-w-5xl mx-auto pt-6">
+              <div className="mb-8">
+                <h1 className="text-3xl font-salena font-semibold tracking-tight">
+                  Welcome back, <span className="capitalize">{user?.email.split('@')[0]}</span>
+                </h1>
+                <p className="text-zinc-500 mt-1">Pick a studio to get started.</p>
               </div>
 
-              <div className="glass-pane border-dashed border-[#8bb7df] flex flex-col justify-center items-center text-center opacity-70">
-                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-black mb-6">
-                  <Sparkles className="w-8 h-8" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <motion.button
+                  whileHover={{ y: -3 }}
+                  whileTap={{ scale: 0.99 }}
+                  onClick={() => setCurrentPage('videogen')}
+                  className="group glass-pane text-left flex flex-col justify-between min-h-64 relative overflow-hidden hover:shadow-lg"
+                >
+                  <div className="w-12 h-12 bg-zinc-900 rounded-2xl flex items-center justify-center text-white shadow-md">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div className="mt-8">
+                    <span className="inline-block px-2 py-0.5 bg-black/10 text-zinc-800 text-xs font-semibold rounded-md mb-2">Ready</span>
+                    <h3 className="text-2xl font-salena font-bold text-zinc-900 mb-1.5">VideoGen</h3>
+                    <p className="text-zinc-700/80 text-sm leading-relaxed">Create viral videos with a guided AI workflow. We handle the trends, the script, and the scenes.</p>
+                    <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-primary group-hover:gap-2 transition-all">
+                      Start creating <ArrowRight className="w-4 h-4" />
+                    </span>
+                  </div>
+                </motion.button>
+
+                <div className="glass-pane-pink border-dashed flex flex-col justify-center items-center text-center min-h-64">
+                  <div className="w-12 h-12 bg-[var(--color-done-green)] rounded-2xl flex items-center justify-center text-[var(--color-timeline-text)] mb-4">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <p className="font-semibold text-zinc-900">Audio Studio</p>
+                  <p className="text-zinc-500 text-sm mt-1">Coming in phase 2</p>
                 </div>
-                <p className="font-black text-black uppercase tracking-[0.2em] text-xs">Analytics Engine</p>
-                <p className="text-black/40 text-sm font-bold mt-2 italic">Coming Phase 3</p>
+
+                <div className="glass-pane border-dashed flex flex-col justify-center items-center text-center min-h-64 opacity-75">
+                  <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-zinc-800 mb-4">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <p className="font-semibold text-zinc-900">Analytics Engine</p>
+                  <p className="text-zinc-500 text-sm mt-1">Coming in phase 3</p>
+                </div>
               </div>
             </div>
           )}
 
           {currentPage === 'videogen' && (
-            <div className="space-y-16">
+            <div className="space-y-4">
               {/* Timeline */}
-              <section className="mb-8">
-                <Timeline 
-                  steps={steps} 
-                  currentStep={currentStep} 
+              <section>
+                <Timeline
+                  steps={steps}
+                  currentStep={currentStep}
                   onStepClick={(id) => {
                     if (id <= currentStep || steps[id-1].status !== 'pending') {
                       setCurrentStep(id);
                     }
-                  }} 
+                  }}
                 />
               </section>
 
@@ -208,7 +194,7 @@ export default function App() {
               <div className="relative">
                 <AnimatePresence mode="wait">
                   {currentStep === 1 && (
-                    <Step1_Inputs 
+                    <Step1_Inputs
                       key="step1"
                       initialData={inputs || undefined}
                       onNext={(data) => {
@@ -218,7 +204,7 @@ export default function App() {
                     />
                   )}
                   {currentStep === 2 && inputs && (
-                    <Step2_Topics 
+                    <Step2_Topics
                       key="step2"
                       niche={inputs.niche}
                       duration={`${inputs.duration} ${inputs.durationUnit}`}
@@ -232,7 +218,7 @@ export default function App() {
                     />
                   )}
                   {currentStep === 3 && inputs && (
-                    <Step3_Script 
+                    <Step3_Script
                       key="step3"
                       topic={selectedTopic}
                       niche={inputs.niche}
@@ -247,7 +233,7 @@ export default function App() {
                     />
                   )}
                   {currentStep === 4 && (
-                    <Step4_Audio 
+                    <Step4_Audio
                       key="step4"
                       script={script}
                       initialAudio={audioUrl}
@@ -258,7 +244,7 @@ export default function App() {
                     />
                   )}
                   {currentStep === 5 && inputs && (
-                    <Step5_Visuals 
+                    <Step5_Visuals
                       key="step5"
                       script={script}
                       sceneCount={inputs.sceneCount}
@@ -279,7 +265,7 @@ export default function App() {
                     />
                   )}
                   {currentStep === 7 && scenes && (
-                    <Step8_Compile 
+                    <Step8_Compile
                       scenes={scenes}
                       audioUrl={audioUrl}
                       onNext={(url) => {
@@ -289,7 +275,7 @@ export default function App() {
                     />
                   )}
                   {currentStep === 8 && (
-                    <Step9_Download 
+                    <Step9_Download
                       videoUrl={finalVideoUrl}
                       onReset={resetApp}
                       project={inputs ? {
@@ -317,34 +303,34 @@ export default function App() {
       {/* Background Decor */}
       <div className="fixed -z-10 top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         {/* Animated Blobs */}
-        <motion.div 
-          animate={{ 
+        <motion.div
+          animate={{
             scale: [1, 1.2, 1],
             rotate: [0, 90, 0],
             x: [0, 50, 0],
             y: [0, -30, 0]
           }}
           transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-primary/5 blur-[120px] rounded-full" 
+          className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-primary/5 blur-[120px] rounded-full"
         />
-        <motion.div 
-          animate={{ 
+        <motion.div
+          animate={{
             scale: [1.2, 1, 1.2],
             rotate: [0, -90, 0],
             x: [0, -50, 0],
             y: [0, 30, 0]
           }}
           transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-          className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-secondary/5 blur-[120px] rounded-full" 
+          className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-secondary/5 blur-[120px] rounded-full"
         />
-        <motion.div 
-          animate={{ 
+        <motion.div
+          animate={{
             scale: [1, 1.3, 1],
             x: [0, 30, 0],
             y: [0, 50, 0]
           }}
           transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-          className="absolute top-[20%] right-[-5%] w-[30%] h-[30%] bg-brand-berry/5 blur-[100px] rounded-full" 
+          className="absolute top-[20%] right-[-5%] w-[30%] h-[30%] bg-brand-berry/5 blur-[100px] rounded-full"
         />
 
         {/* Cute Floating Icons */}
@@ -367,16 +353,16 @@ function FloatingIcon({ icon, top, left, delay = 0 }: { icon: React.ReactNode, t
   return (
     <motion.div
       initial={{ opacity: 0 }}
-      animate={{ 
+      animate={{
         opacity: [0.3, 0.6, 0.3],
         y: [0, -20, 0],
         rotate: [0, 10, -10, 0]
       }}
-      transition={{ 
-        duration: 8, 
-        repeat: Infinity, 
+      transition={{
+        duration: 8,
+        repeat: Infinity,
         delay,
-        ease: "easeInOut" 
+        ease: "easeInOut"
       }}
       style={{ top, left }}
       className="absolute text-brand-primary/10"
