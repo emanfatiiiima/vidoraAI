@@ -27,8 +27,8 @@ async def text_to_speech(body: TTSRequest, services: ServicesDep) -> dict[str, A
 
 @router.post("/generate-image", response_model=UrlResponse)
 async def generate_image(body: ImageRequest, services: ServicesDep) -> UrlResponse:
-    """Generate an image for a scene prompt."""
-    return UrlResponse(url=await services.images.generate(body.prompt))
+    """Generate an image for a scene prompt with the provider the user picked (if any)."""
+    return UrlResponse(url=await services.images.generate(body.prompt, body.provider))
 
 
 @router.post("/generate-video", response_model=VideoResponse)

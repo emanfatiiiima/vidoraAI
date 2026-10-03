@@ -135,8 +135,13 @@ class TTSRequest(ApiModel):
     pitch: float | None = None
 
 
+#: Image providers the user can pick in the UI. ``None`` = automatic fallback.
+ImageProviderName = Literal["openai", "leonardo", "gemini"]
+
+
 class ImageRequest(ApiModel):
     prompt: str = Field(min_length=1)
+    provider: ImageProviderName | None = None
 
 
 class UrlResponse(ApiModel):

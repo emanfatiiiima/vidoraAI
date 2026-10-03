@@ -164,3 +164,62 @@ def test_image_service_returns_data_uri_from_pollinations() -> None:
             return await service.generate("a fox")
 
     assert asyncio.run(run()) == "data:image/jpeg;base64,anBn"
+
+
+# ---------------------------------------------------------------------- #
+# Leonardo image provider
+# ---------------------------------------------------------------------- #
+def test_leonardo_client_polls_until_complete() -> None:
+    import httpx
+
+    from core.images import LeonardoClient
+
+    polls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == "Bearer key"
+        if request.method == "POST":
+            return httpx.Response(200, json={"sdGenerationJob": {"generationId": "gen-1"}})
+        polls.append(request)
+        if len(polls) < 2:
+            return httpx.Response(200, json={"generations_by_pk": {"status": "PENDING"}})
+        images = [{"url": "https://cdn.leonardo.ai/img.jpg"}]
+        return httpx.Response(200, json={"generations_by_pk": {"status": "COMPLETE", "generated_images": images}})
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            client = LeonardoClient(http=http, api_key="key", model_id="m", poll_interval_seconds=0)
+            return await client.generate("a fox")
+
+    assert asyncio.run(run()) == "https://cdn.leonardo.ai/img.jpg"
+    assert len(polls) == 2
+
+
+def test_leonardo_client_keeps_upstream_status() -> None:
+    import httpx
+
+    from core.exceptions import ExternalServiceError
+    from core.images import LeonardoClient
+
+    async def run():
+        transport = httpx.MockTransport(lambda r: httpx.Response(429, json={"error": "quota"}))
+        async with httpx.AsyncClient(transport=transport) as http:
+            await LeonardoClient(http=http, api_key="key", model_id="m").generate("a fox")
+
+    with pytest.raises(ExternalServiceError) as info:
+        asyncio.run(run())
+    assert info.value.upstream_status == 429
+
+
+def test_image_service_raises_when_leonardo_not_configured() -> None:
+    import httpx
+
+    from core.services import ImageService
+
+    async def run():
+        async with httpx.AsyncClient() as http:
+            service = ImageService(http=http, gemini=None, gemini_model="", openai=None, openai_model="")
+            await service.generate("a fox", provider="leonardo")
+
+    with pytest.raises(ProviderNotConfiguredError):
+        asyncio.run(run())

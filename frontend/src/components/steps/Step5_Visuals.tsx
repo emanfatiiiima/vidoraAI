@@ -6,13 +6,35 @@ import StepHeader from "../ui/StepHeader";
 import StepFooter from "../ui/StepFooter";
 import Notice from "../ui/Notice";
 import { cn } from "../../lib/utils";
-import { generateImage as requestImage, generateScenePrompt, splitScriptIntoScenes, type ImageProvider } from "../../services/api";
+import {
+  ApiError,
+  generateImage as requestImage,
+  generateScenePrompt,
+  isRateLimitError,
+  splitScriptIntoScenes,
+  type ImageProvider,
+} from "../../services/api";
 
 const IMAGE_AI_OPTIONS: { id: ImageProvider; label: string }[] = [
   { id: "openai", label: "ChatGPT" },
   { id: "leonardo", label: "Leonardo" },
   { id: "gemini", label: "Gemini" },
 ];
+
+/** Turn a failed image request into a message that tells the user what to do next. */
+function imageErrorMessage(error: unknown, provider: ImageProvider): string {
+  const name = IMAGE_AI_OPTIONS.find(o => o.id === provider)!.label;
+  if (error instanceof ApiError && error.code === "network_error") {
+    return "Failed to reach the server. Please check your connection.";
+  }
+  if (error instanceof ApiError && error.code === "provider_not_configured") {
+    return `${name} is not configured on the server. Please choose another AI.`;
+  }
+  if (isRateLimitError(error)) {
+    return `${name} hit its quota limit. Wait a moment or choose another AI.`;
+  }
+  return `${name} couldn't generate the image. Try again or choose another AI.`;
+}
 
 interface Scene {
   id: number;
@@ -35,7 +57,7 @@ export default function Step6_Images({ script, sceneCount, style, onNext }: Step
   const [isSplitting, setIsSplitting] = useState(true);
   const [isGenerating, setIsGenerating] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
-  // The image AI the user picked. UI only for now; wiring to the backend comes later.
+  // The image AI the user picked; sent with every image request.
   const [imageProvider, setImageProvider] = useState<ImageProvider>("openai");
 
   useEffect(() => {
@@ -88,18 +110,21 @@ export default function Step6_Images({ script, sceneCount, style, onNext }: Step
     setScenes([...updated]);
   };
 
-  const generateImage = async (index: number) => {
+  /** Generate one scene's image. Returns false if it failed. */
+  const generateImage = async (index: number): Promise<boolean> => {
     setIsGenerating(prev => ({ ...prev, [index]: true }));
     setError(null);
     try {
-      const url = await requestImage(scenes[index].prompt);
+      const url = await requestImage(scenes[index].prompt, imageProvider);
 
       const updated = [...scenes];
       updated[index].selectedImage = url;
       setScenes(updated);
+      return true;
     } catch (err) {
       console.error("Image Gen Error:", err);
-      setError("Image generation is busy right now. Please try again in a moment.");
+      setError(imageErrorMessage(err, imageProvider));
+      return false;
     } finally {
       setIsGenerating(prev => ({ ...prev, [index]: false }));
     }
@@ -107,9 +132,10 @@ export default function Step6_Images({ script, sceneCount, style, onNext }: Step
 
   const generateAllImages = async () => {
     for (let i = 0; i < scenes.length; i++) {
-       if (!scenes[i].selectedImage && scenes[i].prompt) {
-         await generateImage(i);
-       }
+      if (!scenes[i].selectedImage && scenes[i].prompt) {
+        // Stop at the first failure so one broken provider doesn't fail every scene.
+        if (!(await generateImage(i))) break;
+      }
     }
   };
 
