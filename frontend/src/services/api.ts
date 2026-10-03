@@ -162,6 +162,9 @@ export async function generateScenePrompt(text: string, style: string): Promise<
   return data.prompt;
 }
 
+/** Image AI the user can pick. Selection only for now - not sent to the backend yet. */
+export type ImageProvider = "openai" | "leonardo" | "gemini";
+
 /** Generate an image for a prompt. Returns an image URL (http or data: URI). */
 export async function generateImage(prompt: string): Promise<string> {
   const data = await post<{ url: string }>("/generate-image", { prompt });

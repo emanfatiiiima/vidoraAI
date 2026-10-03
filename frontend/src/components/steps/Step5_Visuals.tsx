@@ -6,7 +6,13 @@ import StepHeader from "../ui/StepHeader";
 import StepFooter from "../ui/StepFooter";
 import Notice from "../ui/Notice";
 import { cn } from "../../lib/utils";
-import { generateImage as requestImage, generateScenePrompt, splitScriptIntoScenes } from "../../services/api";
+import { generateImage as requestImage, generateScenePrompt, splitScriptIntoScenes, type ImageProvider } from "../../services/api";
+
+const IMAGE_AI_OPTIONS: { id: ImageProvider; label: string }[] = [
+  { id: "openai", label: "ChatGPT" },
+  { id: "leonardo", label: "Leonardo" },
+  { id: "gemini", label: "Gemini" },
+];
 
 interface Scene {
   id: number;
@@ -29,6 +35,8 @@ export default function Step6_Images({ script, sceneCount, style, onNext }: Step
   const [isSplitting, setIsSplitting] = useState(true);
   const [isGenerating, setIsGenerating] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  // The image AI the user picked. UI only for now; wiring to the backend comes later.
+  const [imageProvider, setImageProvider] = useState<ImageProvider>("openai");
 
   useEffect(() => {
     splitScript();
@@ -131,6 +139,23 @@ export default function Step6_Images({ script, sceneCount, style, onNext }: Step
               {isBusy ? <Spinner /> : <Sparkles className="w-4 h-4" />}
               <span>{isBusy ? "Generating..." : "Generate all images"}</span>
             </button>
+            <div className="inline-flex items-center gap-1 p-1 bg-white/70 rounded-xl border border-black/5" role="group" aria-label="Image AI">
+              {IMAGE_AI_OPTIONS.map(option => (
+                <button
+                  key={option.id}
+                  onClick={() => setImageProvider(option.id)}
+                  disabled={isBusy}
+                  aria-pressed={imageProvider === option.id}
+                  title={`Generate images with ${option.label}`}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:cursor-not-allowed",
+                    imageProvider === option.id ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             <span className="self-center text-sm text-zinc-500">{readyCount} of {scenes.length} ready</span>
           </>
         }
