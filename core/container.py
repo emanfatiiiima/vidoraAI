@@ -18,6 +18,7 @@ from groq import AsyncGroq
 from openai import AsyncOpenAI
 
 from core.config import Settings
+from core.images import LeonardoClient
 from core.llm import LLMProvider, LLMRouter
 from core.llm.providers import GeminiProvider, GroqProvider, OpenAIProvider
 from core.services import (
@@ -83,6 +84,13 @@ def build_services(settings: Settings, http: httpx.AsyncClient) -> Services:
     else:
         logger.info("LLM providers (in order): %s", ", ".join(p.name for p in providers))
 
+    # Image provider clients - only created when their API key is set.
+    leonardo = (
+        LeonardoClient(http=http, api_key=settings.leonardo_api_key, model_id=settings.leonardo_model_id)
+        if settings.leonardo_api_key
+        else None
+    )
+
     llm = LLMRouter(providers)
     research = ResearchService(http, settings.serpapi_key)
 
@@ -99,6 +107,7 @@ def build_services(settings: Settings, http: httpx.AsyncClient) -> Services:
             gemini_model=settings.gemini_image_model,
             openai=openai,
             openai_model=settings.openai_image_model,
+            leonardo=leonardo,
         ),
         video=VideoService(),
         project_export=ProjectExporter(http),

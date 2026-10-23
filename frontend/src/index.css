@@ -6,25 +6,27 @@
   --font-display: "Playfair Display", serif;
   --font-salena: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  
+
   --color-brand-primary: #0065a2;
+  --color-brand-primary-dark: #00507f;
   --color-brand-secondary: #00cdac;
   --color-brand-accent: #ffa23a;
   --color-brand-berry: #c05780;
-  
+
   --color-box-yellow: #ffd872;
   --color-box-pink: #f2d4cc;
+  --color-box-border: #8bb7df;
   --color-done-green: #c6e9c8;
   --color-timeline-text: #718804;
 }
 
 @layer base {
   body {
-    @apply font-plus bg-white text-black selection:bg-brand-primary/30;
+    @apply font-plus bg-white text-zinc-900 antialiased selection:bg-brand-primary/20;
   }
-  
+
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display tracking-tight text-black;
+    @apply font-display tracking-tight text-zinc-900;
   }
 
   .font-salena {
@@ -32,50 +34,100 @@
   }
 }
 
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
+/* Reusable component classes. Kept in the "components" layer so Tailwind
+   utilities (e.g. pl-10, w-full) can still override them. */
+@layer components {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 
-.glass-pane {
-  @apply bg-[var(--color-box-yellow)] rounded-[40px] p-8 shadow-[0_8px_32px_rgba(0,0,0,0.05)] border-2 border-[#8bb7df] transition-all duration-500;
-}
+  /* ------------------------------------------------------------------ */
+  /* Surfaces                                                            */
+  /* ------------------------------------------------------------------ */
 
-.glass-pane-pink {
-  @apply bg-[var(--color-box-pink)] rounded-[40px] p-8 shadow-[0_8px_32px_rgba(0,0,0,0.05)] border-2 border-[#8bb7df] transition-all duration-500;
-}
+  /* Signature yellow card. */
+  .glass-pane {
+    @apply bg-[var(--color-box-yellow)] rounded-3xl p-6 md:p-8 border border-[var(--color-box-border)]/70 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-16px_rgba(0,0,0,0.12)] transition-colors duration-300;
+  }
 
-.input-field {
-  @apply w-full px-8 py-5 bg-white border-2 border-[#8bb7df] rounded-3xl focus:border-brand-primary focus:bg-white focus:outline-none transition-all shadow-sm font-medium placeholder:text-zinc-400 text-black;
-}
+  /* Signature pink card. */
+  .glass-pane-pink {
+    @apply bg-[var(--color-box-pink)] rounded-3xl p-6 md:p-8 border border-[var(--color-box-border)]/70 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-16px_rgba(0,0,0,0.12)] transition-colors duration-300;
+  }
 
-.btn-primary {
-  @apply relative overflow-hidden bg-brand-primary text-white px-10 py-5 rounded-3xl font-black active:scale-95 transition-all shadow-xl shadow-brand-primary/25 hover:shadow-brand-primary/40 hover:-translate-y-1;
-}
+  /* Neutral white card for secondary content. */
+  .surface {
+    @apply bg-white rounded-2xl border border-zinc-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.04)];
+  }
 
-.btn-secondary {
-  @apply bg-brand-secondary text-white px-10 py-5 rounded-3xl font-bold active:scale-95 transition-all shadow-xl shadow-brand-secondary/20 hover:opacity-90;
-}
+  /* Blue-to-teal highlight card. */
+  .card-vibrant {
+    @apply relative p-6 rounded-3xl bg-gradient-to-br from-brand-primary to-brand-secondary text-white shadow-lg shadow-brand-primary/15;
+  }
 
-.btn-accent {
-  @apply bg-brand-accent text-white px-10 py-5 rounded-3xl font-bold active:scale-95 transition-all shadow-xl shadow-brand-accent/20 hover:opacity-90;
-}
+  /* ------------------------------------------------------------------ */
+  /* Form controls                                                       */
+  /* ------------------------------------------------------------------ */
 
-.btn-berry {
-  @apply bg-brand-berry text-white px-10 py-5 rounded-3xl font-bold active:scale-95 transition-all shadow-xl shadow-brand-berry/20 hover:opacity-90;
-}
+  .input-field {
+    @apply w-full px-4 py-2.5 bg-white border border-[var(--color-box-border)] rounded-xl text-sm font-medium text-zinc-900 placeholder:text-zinc-400 shadow-sm transition focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/10 disabled:opacity-50;
+  }
 
-.btn-ghost {
-  @apply bg-white text-black px-6 py-4 rounded-3xl font-bold hover:bg-zinc-50 transition-all border-2 border-[#8bb7df];
-}
+  /* Small uppercase label above a field or section. */
+  .field-label {
+    @apply block text-xs font-semibold uppercase tracking-wider text-zinc-500;
+  }
 
-.step-indicator {
-  @apply w-12 h-12 rounded-2xl flex items-center justify-center font-black transition-all border-4 border-[#8bb7df];
-}
+  /* Small grey tag, e.g. niche / style chips. */
+  .chip {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-white/70 text-zinc-600 border border-zinc-200/80;
+  }
 
-.card-vibrant {
-  @apply relative p-8 rounded-[40px] bg-gradient-to-br from-brand-primary to-brand-secondary text-white shadow-2xl border-2 border-[#8bb7df];
+  /* ------------------------------------------------------------------ */
+  /* Buttons - one size, several colours. Add .btn-sm / .btn-lg to resize */
+  /* ------------------------------------------------------------------ */
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 bg-brand-primary text-white shadow-sm shadow-brand-primary/20 hover:bg-[var(--color-brand-primary-dark)];
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 bg-brand-secondary text-white shadow-sm shadow-brand-secondary/20 hover:brightness-95;
+  }
+
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 bg-brand-accent text-white shadow-sm shadow-brand-accent/20 hover:brightness-95;
+  }
+
+  .btn-berry {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 bg-brand-berry text-white shadow-sm shadow-brand-berry/20 hover:brightness-95;
+  }
+
+  .btn-dark {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 bg-zinc-900 text-white hover:bg-zinc-800;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 bg-white text-zinc-700 border border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs rounded-lg;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-[15px];
+  }
+
+  .icon-btn {
+    @apply inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white border border-zinc-200 text-zinc-500 transition hover:text-brand-primary hover:border-brand-primary/30;
+  }
+
+  .step-indicator {
+    @apply w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-all border-2 border-[var(--color-box-border)];
+  }
 }

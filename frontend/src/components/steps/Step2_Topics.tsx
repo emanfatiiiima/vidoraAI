@@ -1,9 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion } from "motion/react";
-import { TrendingUp, Zap, ChevronRight, RefreshCw, Edit3 } from "lucide-react";
-import LoadingDonut from "../ui/LoadingDonut";
+import { TrendingUp, Zap, ChevronRight, Edit3, Check, Sparkles, RotateCcw } from "lucide-react";
+import LoadingDonut, { Spinner } from "../ui/LoadingDonut";
+import StepHeader from "../ui/StepHeader";
+import StepFooter from "../ui/StepFooter";
+import Notice from "../ui/Notice";
 import { cn } from "../../lib/utils";
-import { ApiError, fetchBasicTopics, fetchTrendingTopics, fetchUniqueTopics, isRateLimitError } from "../../services/api";
+import { ApiError, fetchBasicTopics, fetchTrendingTopics, fetchUniqueTopics, isRateLimitError, type AIProvider } from "../../services/api";
+
+type TopicTab = "basic" | "unique" | "trending";
+
+const AI_OPTIONS: { id: AIProvider; label: string }[] = [
+  { id: "gemini", label: "Gemini" },
+  { id: "openai", label: "ChatGPT" },
+  { id: "groq", label: "Groq" },
+];
 
 interface Step2Props {
   niche: string;
@@ -20,73 +31,69 @@ export default function Step2_Topics({ niche, duration, onNext, initialTopics, i
   const [trendingTopics, setTrendingTopics] = useState<string[]>(initialTopics?.trending || []);
   const [selectedTopic, setSelectedTopic] = useState(initialSelection || "");
   const [discoveryMode, setDiscoveryMode] = useState<"ai" | "manual" | null>(initialTopics ? "ai" : null);
-  const [activeTab, setActiveTab] = useState<"basic" | "unique" | "trending">("basic");
+  const [activeTab, setActiveTab] = useState<TopicTab>("basic");
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The AI the user picked. Calls go to that AI only; if it fails it is disabled and the user picks again.
+  const [provider, setProvider] = useState<AIProvider | null>(null);
+  const [failedProviders, setFailedProviders] = useState<AIProvider[]>([]);
 
-  useEffect(() => {
-    if (discoveryMode === 'ai' && basicTopics.length === 0) {
-      generateBasic();
-    }
-  }, [discoveryMode]);
+  const topicsByTab: Record<TopicTab, string[]> = { basic: basicTopics, unique: uniqueTopics, trending: trendingTopics };
+  const allProvidersFailed = AI_OPTIONS.every(o => failedProviders.includes(o.id));
 
   // All prompts, AI calls and trend research run on the backend (core/services/topics.py).
-  const generateBasic = async () => {
-    if (basicTopics.length > 0) return; // Prevent re-call
-    setIsLoading(true);
-    setError(null);
-    try {
-      setBasicTopics(await fetchBasicTopics(niche, duration));
-    } catch (e) {
-      console.error(e);
-      if (isRateLimitError(e)) {
-        setError("AI Quota limit reached. Please wait a moment before trying again.");
-      } else if (e instanceof ApiError && e.code === "invalid_ai_response") {
-        setError("AI returned invalid topic format. Try refreshing.");
-      } else {
-        setError("Failed to generate topics. Please check your connection.");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const generateUnique = async () => {
-    setActiveTab("unique");
-    if (uniqueTopics.length > 0) return; // Prevent re-call
-
-    setIsGenerating(true);
-    setError(null);
-    try {
-      setUniqueTopics(await fetchUniqueTopics(niche));
-    } catch (e) {
-      console.error(e);
-      if (isRateLimitError(e)) {
-        setError("AI Quota limit reached. Please wait a moment.");
-      }
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const generateTrending = async () => {
-    setActiveTab("trending");
-    if (trendingTopics.length > 0) return; // Prevent re-call
-
-    setIsGenerating(true);
-    setError(null);
-    try {
+  const loadTopics = async (tab: TopicTab, ai: AIProvider) => {
+    const fetchers: Record<TopicTab, () => Promise<string[]>> = {
+      basic: () => fetchBasicTopics(niche, duration, ai),
+      unique: () => fetchUniqueTopics(niche, ai),
       // The backend scrapes news + Google Trends, then asks the AI for 10 topics.
-      setTrendingTopics(await fetchTrendingTopics(niche));
+      trending: () => fetchTrendingTopics(niche, ai),
+    };
+    const setters: Record<TopicTab, (topics: string[]) => void> = {
+      basic: setBasicTopics,
+      unique: setUniqueTopics,
+      trending: setTrendingTopics,
+    };
+    const setBusy = tab === "basic" ? setIsLoading : setIsGenerating;
+
+    setBusy(true);
+    setError(null);
+    try {
+      setters[tab](await fetchers[tab]());
     } catch (e) {
       console.error(e);
-      if (isRateLimitError(e)) {
-        setError("AI Quota limit reached. Please wait a moment.");
+      if (e instanceof ApiError && e.code === "network_error") {
+        setError("Failed to reach the server. Please check your connection.");
+      } else {
+        const name = AI_OPTIONS.find(o => o.id === ai)!.label;
+        const reason = e instanceof ApiError && e.code === "invalid_ai_response"
+          ? "returned an invalid response"
+          : e instanceof ApiError && e.code === "provider_not_configured"
+            ? "is not configured on the server"
+            : isRateLimitError(e) ? "hit its quota limit" : "couldn't generate topics";
+        setFailedProviders(prev => (prev.includes(ai) ? prev : [...prev, ai]));
+        setProvider(null);
+        setError(`${name} ${reason}. Please choose another AI.`);
       }
     } finally {
-      setIsGenerating(false);
+      setBusy(false);
     }
+  };
+
+  const selectProvider = (ai: AIProvider) => {
+    setProvider(ai);
+    if (topicsByTab[activeTab].length === 0) loadTopics(activeTab, ai);
+  };
+
+  const openTab = (tab: TopicTab) => {
+    setActiveTab(tab);
+    if (topicsByTab[tab].length === 0 && provider) loadTopics(tab, provider);
+  };
+
+  const resetProviders = () => {
+    setFailedProviders([]);
+    setError(null);
   };
 
   const [customTopic, setCustomTopic] = useState("");
@@ -103,40 +110,50 @@ export default function Step2_Topics({ niche, duration, onNext, initialTopics, i
     }
   };
 
+  const tabs = [
+    { id: "basic" as const, label: "Basic", active: "bg-brand-primary text-white" },
+    { id: "unique" as const, label: "Unique ideas", active: "bg-brand-berry text-white" },
+    { id: "trending" as const, label: "Live trends", active: "bg-brand-secondary text-white" },
+  ];
+  const activeTopics = topicsByTab[activeTab];
+  const isBusy = isLoading || isGenerating;
+
   if (!discoveryMode) {
     return (
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-4xl mx-auto space-y-12 pb-32 pt-20"
+        className="max-w-3xl mx-auto"
       >
-        <div className="text-center">
-           <h2 className="text-5xl font-salena text-zinc-900 mb-6 tracking-tighter uppercase font-medium">Topic Discovery</h2>
-           <p className="text-zinc-400 font-medium text-lg leading-relaxed max-w-2xl mx-auto italic">How would you like to define your production narrative?</p>
-        </div>
+        <StepHeader
+          icon={<TrendingUp />}
+          eyebrow="Step 2 · Topic"
+          title="Topic discovery"
+          description="How would you like to choose your video topic?"
+        />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-           <button 
-             onClick={() => setDiscoveryMode("ai")}
-             className="glass-pane !p-12 hover:border-brand-primary/40 transition-all group text-center flex flex-col items-center"
-           >
-              <div className="w-20 h-20 bg-brand-primary/10 rounded-3xl flex items-center justify-center mb-6 border border-brand-primary/20 group-hover:scale-110 transition-transform">
-                <Zap className="w-10 h-10 text-brand-primary" />
-              </div>
-              <h3 className="text-2xl font-black text-zinc-900 mb-4 italic">AI Engine</h3>
-              <p className="text-zinc-400 font-medium text-sm leading-relaxed">Let AI scan trends and niches to generate viral narrative anchors for you.</p>
-           </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <button
+            onClick={() => setDiscoveryMode("ai")}
+            className="glass-pane text-left group hover:shadow-lg hover:-translate-y-0.5 transition-all"
+          >
+            <div className="w-11 h-11 bg-white/70 rounded-xl flex items-center justify-center mb-4 text-brand-primary">
+              <Zap className="w-5 h-5" />
+            </div>
+            <h3 className="text-lg font-salena font-bold text-zinc-900 mb-1">AI suggestions</h3>
+            <p className="text-zinc-600 text-sm leading-relaxed">Let AI scan your niche and live trends to suggest viral topics.</p>
+          </button>
 
-           <button 
-             onClick={() => setDiscoveryMode("manual")}
-             className="glass-pane !p-12 hover:border-brand-accent/40 transition-all group text-center flex flex-col items-center"
-           >
-              <div className="w-20 h-20 bg-brand-accent/10 rounded-3xl flex items-center justify-center mb-6 border border-brand-accent/20 group-hover:scale-110 transition-transform">
-                <Edit3 className="w-10 h-10 text-brand-accent" />
-              </div>
-              <h3 className="text-2xl font-black text-zinc-900 mb-4 italic">Manual Entry</h3>
-              <p className="text-zinc-400 font-medium text-sm leading-relaxed">Have a vision already? Type your own custom script or topic idea directly.</p>
-           </button>
+          <button
+            onClick={() => setDiscoveryMode("manual")}
+            className="glass-pane-pink text-left group hover:shadow-lg hover:-translate-y-0.5 transition-all"
+          >
+            <div className="w-11 h-11 bg-white/70 rounded-xl flex items-center justify-center mb-4 text-amber-700">
+              <Edit3 className="w-5 h-5" />
+            </div>
+            <h3 className="text-lg font-salena font-bold text-zinc-900 mb-1">Write my own</h3>
+            <p className="text-zinc-600 text-sm leading-relaxed">Already have an idea? Type your own topic directly.</p>
+          </button>
         </div>
       </motion.div>
     );
@@ -144,166 +161,188 @@ export default function Step2_Topics({ niche, duration, onNext, initialTopics, i
 
   if (isLoading && basicTopics.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-20 py-32">
-        <LoadingDonut />
-        <p className="mt-10 text-zinc-400 animate-pulse font-black uppercase tracking-[0.3em] text-xs">Architecting Strategies...</p>
+      <div className="flex items-center justify-center py-24">
+        <LoadingDonut label="Finding topic ideas..." />
       </div>
     );
   }
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 30 }}
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-16 pb-32"
+      className="max-w-3xl mx-auto"
     >
-      <div className="text-center">
-        <div className="inline-flex items-center space-x-2 px-4 py-2 bg-brand-primary/10 text-brand-primary rounded-full mb-6">
-          <TrendingUp className="w-4 h-4" />
-          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Phase Two / Discovery</span>
-        </div>
-        <h2 className="text-5xl font-salena text-zinc-900 mb-6 tracking-tighter uppercase font-medium">Discovery Engine</h2>
-        <p className="text-zinc-400 font-medium text-lg max-w-2xl mx-auto italic">Select your path. Basic for staples, Unique for creativity, or Trending for market pulse.</p>
-        
-        {error && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-6 p-4 bg-red-50 border border-red-200 text-red-600 rounded-2xl text-xs font-bold uppercase tracking-wider max-w-md mx-auto"
-          >
-            {error}
-          </motion.div>
-        )}
-      </div>
+      <StepHeader
+        icon={<TrendingUp />}
+        eyebrow="Step 2 · Topic"
+        title={discoveryMode === "ai" ? "Pick a topic" : "Your topic"}
+        description={discoveryMode === "ai"
+          ? "Choose one of the suggestions below or write your own."
+          : "Type the topic you want your video to be about."}
+      />
 
-      {/* Custom Input Section */}
-      <div className="max-w-4xl mx-auto px-4">
-        <form onSubmit={handleCustomTopicSubmit} className="relative group">
-          <input 
-             type="text"
-             value={customTopic}
-             onChange={(e) => {
-               setCustomTopic(e.target.value);
-               if (e.target.value.trim()) setSelectedTopic(e.target.value.trim());
-             }}
-             placeholder="Or enter your own narrative here..."
-             className="w-full p-8 pr-40 bg-white rounded-[40px] border-4 border-[#8bb7df]/20 text-xl font-medium focus:border-brand-primary/40 focus:outline-none transition-all shadow-xl selection:bg-brand-primary/20 placeholder:text-zinc-300 italic"
-          />
-          <button 
-            type="submit"
-            className="absolute right-4 top-4 bottom-4 px-10 bg-zinc-900 text-white rounded-[32px] font-black text-xs uppercase tracking-widest hover:bg-brand-primary transition-all disabled:opacity-50"
-            disabled={!customTopic.trim()}
-          >
-            USE CUSTOM
-          </button>
-        </form>
-      </div>
+      {error && <Notice className="mb-6" onDismiss={() => setError(null)}>{error}</Notice>}
 
-      {/* AI Discovery Section */}
+      {/* Custom topic */}
+      <form onSubmit={handleCustomTopicSubmit} className="flex gap-2 mb-8">
+        <input
+          type="text"
+          value={customTopic}
+          onChange={(e) => {
+            setCustomTopic(e.target.value);
+            if (e.target.value.trim()) setSelectedTopic(e.target.value.trim());
+          }}
+          placeholder="Write your own topic..."
+          className="input-field !py-3"
+        />
+        <button type="submit" className="btn-dark shrink-0" disabled={!customTopic.trim()}>
+          Use this
+        </button>
+      </form>
+
+      {/* AI suggestions */}
       {discoveryMode === "ai" && (
-        <>
-          {/* Tabs / Switches */}
-          <div className="flex flex-wrap justify-center gap-4">
-            <button 
-              onClick={() => setActiveTab("basic")}
-              className={cn(
-                "px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all border-2",
-                activeTab === "basic" ? "bg-brand-primary text-white border-brand-primary" : "bg-white text-zinc-400 border-[#8bb7df] hover:border-brand-primary shadow-sm"
-              )}
-            >
-              Basic Topics (10)
-            </button>
-            <button 
-              onClick={generateUnique}
-              disabled={isGenerating}
-              className={cn(
-                "px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all border-2",
-                activeTab === "unique" ? "bg-brand-berry text-white border-brand-berry" : "bg-white text-zinc-400 border-[#8bb7df] hover:border-brand-berry shadow-sm"
-              )}
-            >
-              {isGenerating && activeTab === "unique" ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Get Unique Ideas"}
-            </button>
-            <button 
-              onClick={generateTrending}
-              disabled={isGenerating}
-              className={cn(
-                "px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all border-2",
-                activeTab === "trending" ? "bg-brand-secondary text-white border-brand-secondary" : "bg-white text-zinc-400 border-[#8bb7df] hover:border-brand-secondary shadow-sm"
-              )}
-            >
-              {isGenerating && activeTab === "trending" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <div className="flex items-center space-x-2"><Zap className="w-4 h-4" /><span>Live Trends Scraping</span></div>}
-            </button>
-          </div>
-
-          <div className="max-w-4xl mx-auto px-4">
-            <div className="glass-pane-pink !p-12 min-h-[400px] flex flex-col">
-              <div className="flex items-center space-x-3 mb-12">
-                <div className={cn("w-3 h-3 rounded-full animate-pulse", activeTab === 'basic' ? 'bg-brand-primary' : activeTab === 'unique' ? 'bg-brand-berry' : 'bg-brand-secondary')} />
-                <h3 className="text-xl font-black text-zinc-900 uppercase tracking-widest italic">
-                  {activeTab === 'basic' ? 'Baseline Concepts' : activeTab === 'unique' ? 'Avant-Garde Ideas' : 'Market Evolution'}
-                </h3>
-              </div>
-
-              {isGenerating ? (
-                <div className="flex-grow flex items-center justify-center">
-                  <LoadingDonut />
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {Array.isArray(activeTab === 'basic' ? basicTopics : activeTab === 'unique' ? uniqueTopics : trendingTopics) && 
-                   (activeTab === 'basic' ? basicTopics : activeTab === 'unique' ? uniqueTopics : trendingTopics).map((t, i) => (
-                    <motion.button
-                      key={i}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      onClick={() => handleTopicSelect(t)}
+        <div className="glass-pane-pink !p-4 md:!p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div className="inline-flex p-1 bg-white/70 rounded-xl border border-black/5">
+              {tabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => openTab(tab.id)}
+                  disabled={isBusy}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-colors inline-flex items-center gap-1.5",
+                    activeTab === tab.id ? tab.active : "text-zinc-600 hover:text-zinc-900"
+                  )}
+                >
+                  {tab.id === "trending" && <Zap className="w-3.5 h-3.5" />}
+                  {tab.label}
+                  {isGenerating && activeTab === tab.id && <Spinner className="w-3.5 h-3.5" />}
+                </button>
+              ))}
+            </div>
+            {(provider || activeTopics.length > 0) && (
+              <div className="inline-flex items-center gap-1 p-1 bg-white/70 rounded-xl border border-black/5" role="group" aria-label="AI model">
+                {AI_OPTIONS.map(option => {
+                  const failed = failedProviders.includes(option.id);
+                  // Once an AI is chosen the choice is locked; it only reopens if that AI fails.
+                  const locked = provider !== null && provider !== option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() => selectProvider(option.id)}
+                      disabled={failed || locked || isBusy}
+                      aria-pressed={provider === option.id}
+                      title={failed
+                        ? `${option.label} failed - choose another AI`
+                        : locked ? "Topics are being generated with another AI" : `Generate with ${option.label}`}
                       className={cn(
-                        "w-full text-left p-6 rounded-[32px] font-bold text-base transition-all border-2",
-                        selectedTopic === t 
-                          ? "bg-zinc-900 text-white border-zinc-900 shadow-xl" 
-                          : "bg-zinc-50/50 text-zinc-500 border-transparent hover:border-[#8bb7df] hover:bg-white"
+                        "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:cursor-not-allowed",
+                        provider === option.id ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900",
+                        locked && "opacity-40 hover:text-zinc-600",
+                        failed && "line-through opacity-40 hover:text-zinc-600"
                       )}
                     >
-                      <div className="flex items-start">
-                        <span className="opacity-20 font-black mr-4 mt-1 text-xs">{String(i+1).padStart(2, '0')}</span>
-                        <span>{t}</span>
-                      </div>
-                    </motion.button>
-                  ))}
-                </div>
-              )}
-              
-              {(activeTab === 'unique' && uniqueTopics.length === 0 && !isGenerating) && (
-                <div className="flex-grow flex items-center justify-center text-zinc-300 italic font-medium">Click "Get Unique Ideas" to initiate catalyst</div>
-              )}
-              {(activeTab === 'trending' && trendingTopics.length === 0 && !isGenerating) && (
-                <div className="flex-grow flex items-center justify-center text-zinc-300 italic font-medium">Click "Live Trends Scraping" to sync with live data</div>
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {!provider && activeTopics.length === 0 && !isBusy ? (
+            <div className="py-8 text-center">
+              {allProvidersFailed ? (
+                <>
+                  <p className="text-sm text-zinc-600 mb-4">All AI options failed. Write your own topic above, or try the AIs again.</p>
+                  <button onClick={resetProviders} className="btn-dark inline-flex items-center gap-2">
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Try again</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-zinc-900 mb-1">Choose an AI to generate ideas</p>
+                  <p className="text-xs text-zinc-600 mb-5">Topics are generated only by the AI you pick.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 max-w-xl mx-auto">
+                    {AI_OPTIONS.map(option => {
+                      const failed = failedProviders.includes(option.id);
+                      return (
+                        <button
+                          key={option.id}
+                          onClick={() => selectProvider(option.id)}
+                          disabled={failed}
+                          className={cn(
+                            "px-4 py-3 rounded-xl text-sm font-semibold border transition-all inline-flex items-center justify-center gap-2",
+                            failed
+                              ? "bg-white/40 text-zinc-400 border-transparent cursor-not-allowed"
+                              : "bg-white/80 text-zinc-800 border-transparent hover:border-[var(--color-box-border)] hover:bg-white hover:shadow-sm"
+                          )}
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          <span>{option.label}</span>
+                          {failed && <span className="text-[10px] font-medium uppercase tracking-wide">Unavailable</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
-          </div>
-        </>
+          ) : isGenerating ? (
+            <div className="py-16 flex justify-center">
+              <LoadingDonut label={activeTab === "trending" ? "Reading live trends..." : "Generating ideas..."} />
+            </div>
+          ) : activeTopics.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {activeTopics.map((t, i) => {
+                const isSelected = selectedTopic === t;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => handleTopicSelect(t)}
+                    className={cn(
+                      "w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border flex items-start gap-3",
+                      isSelected
+                        ? "bg-zinc-900 text-white border-zinc-900 shadow-md"
+                        : "bg-white/80 text-zinc-700 border-transparent hover:border-[var(--color-box-border)] hover:bg-white"
+                    )}
+                  >
+                    <span className={cn("text-xs font-semibold mt-0.5 tabular-nums", isSelected ? "text-white/50" : "text-zinc-400")}>
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span className="flex-1">{t}</span>
+                    {isSelected && <Check className="w-4 h-4 mt-0.5 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="py-12 text-center text-sm text-zinc-500">
+              No ideas yet. Click an AI above to generate them.
+            </p>
+          )}
+        </div>
       )}
 
-      {/* Manual Selection / Custom */}
+      {/* Continue */}
       {selectedTopic && (
-        <motion.div 
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 glass-pane !bg-white/90 !p-8 flex flex-col md:flex-row items-center gap-10 shadow-2xl ring-2 ring-[#8bb7df]"
-        >
-          <div className="px-4">
-            <span className="text-[10px] font-black text-brand-primary tracking-[0.2em] block uppercase mb-2">Selected Narrative</span>
-            <span className="text-zinc-900 font-bold text-xl truncate max-w-[500px] block italic leading-tight">"{selectedTopic}"</span>
-          </div>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => onNext(selectedTopic, { basic: basicTopics, unique: uniqueTopics, trending: trendingTopics })}
-            className="btn-primary group flex items-center gap-4 px-14 py-6"
-          >
-            <span className="text-lg">PROCEED TO PRODUCTION</span>
-            <ChevronRight className="w-6 h-6 group-hover:translate-x-2 transition-transform" />
-          </motion.button>
-        </motion.div>
+        <StepFooter
+          icon={<Check />}
+          title={selectedTopic}
+          description="Selected topic"
+          action={
+            <button
+              onClick={() => onNext(selectedTopic, { basic: basicTopics, unique: uniqueTopics, trending: trendingTopics })}
+              className="btn-primary"
+            >
+              <span>Continue to script</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          }
+        />
       )}
     </motion.div>
   );

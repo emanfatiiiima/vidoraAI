@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     groq_api_key: str | None = None
     serpapi_key: str | None = None
     unreal_speech_api_key: str | None = None
+    leonardo_api_key: str | None = None
 
     # ------------------------------------------------------------------ #
     # Model selection
@@ -44,6 +45,9 @@ class Settings(BaseSettings):
     openai_text_model: str = "gpt-4o-mini"
     openai_image_model: str = "dall-e-3"
     groq_text_model: str = "llama-3.3-70b-versatile"
+    # Leonardo model id (default: Leonardo Phoenix 1.0). Other ids are listed
+    # under "Platform models" in the Leonardo API docs.
+    leonardo_model_id: str = "de7d3faf-762f-48e0-b3b7-9d0ac3a3fcf3"
 
     # Comma-separated order in which text providers are tried, e.g. "groq,openai".
     # Providers without an API key are skipped automatically.
@@ -86,6 +90,7 @@ class Settings(BaseSettings):
         "groq_api_key",
         "serpapi_key",
         "unreal_speech_api_key",
+        "leonardo_api_key",
         mode="before",
     )
     @classmethod

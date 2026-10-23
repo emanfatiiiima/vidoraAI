@@ -23,6 +23,7 @@ from core.exceptions import (
     ExternalServiceError,
     InvalidAIResponseError,
     InvalidInputError,
+    ProviderFailedError,
     ProviderNotConfiguredError,
 )
 
@@ -33,6 +34,7 @@ _STATUS_BY_EXCEPTION: dict[type[CoreError], int] = {
     InvalidInputError: status.HTTP_400_BAD_REQUEST,
     ProviderNotConfiguredError: status.HTTP_503_SERVICE_UNAVAILABLE,
     AllProvidersFailedError: status.HTTP_503_SERVICE_UNAVAILABLE,
+    ProviderFailedError: status.HTTP_502_BAD_GATEWAY,
     InvalidAIResponseError: status.HTTP_502_BAD_GATEWAY,
     ExternalServiceError: status.HTTP_502_BAD_GATEWAY,
 }

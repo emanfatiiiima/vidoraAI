@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { FileText, Download, Wand2, Type, ArrowRight, Layout, Pencil, Save, Check, Rocket } from "lucide-react";
+import { FileText, Download, Wand2, ArrowRight, Pencil, Check, PenTool } from "lucide-react";
 import LoadingDonut from "../ui/LoadingDonut";
+import StepHeader from "../ui/StepHeader";
+import Notice from "../ui/Notice";
 import { saveAs } from "file-saver";
 import { cn } from "../../lib/utils";
 import { exportScript, generateScript, isRateLimitError, summarizeScript, type ExportFormat } from "../../services/api";
@@ -68,114 +70,92 @@ export default function Step3_Script({ niche, topic, style, duration, onNext, in
 
   if (isGenerating) {
     return (
-      <div className="flex flex-col items-center justify-center p-20 py-32">
-        <LoadingDonut />
-        <p className="mt-10 text-zinc-400 animate-pulse font-black uppercase tracking-[0.3em] text-xs">Penning the Narrative...</p>
+      <div className="flex items-center justify-center py-24">
+        <LoadingDonut label="Writing your script..." />
       </div>
     );
   }
 
+  const wordCount = script.trim() ? script.trim().split(/\s+/).length : 0;
+
   return (
-    <motion.div 
-      initial={{ opacity: 0, x: 30 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="max-w-6xl mx-auto space-y-12 pb-32"
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-5xl mx-auto"
     >
-      {/* Title Header */}
-      <div className="glass-pane-pink flex flex-col md:flex-row items-center justify-between gap-8 py-10 px-12">
-        <div className="flex-grow text-center md:text-left">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 bg-brand-primary/10 text-brand-primary rounded-lg mb-4">
-             <Rocket className="w-3 h-3" />
-             <span className="text-[10px] font-black uppercase tracking-widest">Phase Three / Narrative Generation</span>
-          </div>
-          <h2 className="text-4xl font-salena text-zinc-900 leading-tight">"{topic}"</h2>
-          <div className="flex items-center justify-center md:justify-start space-x-4 mt-4">
-             <span className="px-3 py-1 bg-zinc-100 text-zinc-400 text-[10px] font-black uppercase tracking-widest rounded-lg">{niche}</span>
-             <span className="px-3 py-1 bg-zinc-100 text-zinc-400 text-[10px] font-black uppercase tracking-widest rounded-lg">{duration}</span>
-             <span className="px-3 py-1 bg-zinc-100 text-zinc-400 text-[10px] font-black uppercase tracking-widest rounded-lg">{style}</span>
-          </div>
-          {error && (
-            <div className="mt-4 p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-red-100">
-              {error}
-            </div>
-          )}
-        </div>
-        <div className="flex space-x-3 shrink-0">
-          <button onClick={exportTxt} className="w-16 h-16 bg-zinc-100/50 text-zinc-400 rounded-3xl flex items-center justify-center hover:bg-zinc-200 hover:text-zinc-600 transition-all border border-transparent hover:border-zinc-300" title="Export TXT">
-            <FileText className="w-7 h-7" />
-          </button>
-          <button onClick={exportDocx} className="w-16 h-16 bg-brand-primary/5 text-brand-primary rounded-3xl flex items-center justify-center hover:bg-brand-primary hover:text-white transition-all shadow-lg shadow-brand-primary/10" title="Export DOCX">
-            <Download className="w-7 h-7" />
-          </button>
-        </div>
+      <StepHeader
+        icon={<PenTool />}
+        eyebrow="Step 3 · Script"
+        title={topic}
+      />
+      <div className="flex flex-wrap justify-center gap-2 -mt-6 mb-8">
+        <span className="chip">{niche}</span>
+        <span className="chip">{duration}</span>
+        <span className="chip">{style}</span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        {/* Main Editor */}
-        <div className="lg:col-span-2 glass-pane !p-0 flex flex-col h-[700px] bg-white">
-          <div className="flex items-center justify-between px-10 py-6 bg-zinc-50 border-b border-zinc-100">
-            <div className="flex items-center space-x-3">
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50" />
-              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Live Script Editor</span>
+      {error && <Notice className="mb-6" onDismiss={() => setError(null)}>{error}</Notice>}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Script editor */}
+        <div className="lg:col-span-2 surface flex flex-col h-[560px] overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-zinc-100">
+            <div className="flex items-center gap-2 text-sm font-semibold text-zinc-700">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full" />
+              Script
+              <span className="text-xs font-normal text-zinc-400">· {wordCount} words</span>
             </div>
-            <button 
-              onClick={() => setIsEditing(!isEditing)}
-              className={cn(
-                "flex items-center space-x-2 px-6 py-2 rounded-2xl text-[10px] font-black transition-all border-2",
-                isEditing 
-                  ? "bg-brand-primary border-brand-primary text-white shadow-lg shadow-brand-primary/30" 
-                  : "bg-white border-zinc-200 text-zinc-500 hover:text-brand-primary hover:border-brand-primary/30"
-              )}
-            >
-              {isEditing ? <Check className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
-              <span>{isEditing ? "SAVE PRODUCTION DRAFT" : "ENTER EDITOR MODE"}</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button onClick={exportTxt} className="btn-ghost btn-sm" title="Download as .txt">
+                <FileText className="w-3.5 h-3.5" /> TXT
+              </button>
+              <button onClick={exportDocx} className="btn-ghost btn-sm" title="Download as .docx">
+                <Download className="w-3.5 h-3.5" /> DOCX
+              </button>
+              <button
+                onClick={() => setIsEditing(!isEditing)}
+                className={cn("btn-sm", isEditing ? "btn-primary" : "btn-ghost")}
+              >
+                {isEditing ? <Check className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
+                <span>{isEditing ? "Done" : "Edit"}</span>
+              </button>
+            </div>
           </div>
-          <div className="flex-grow overflow-y-auto p-10 font-medium text-lg leading-relaxed text-zinc-700 whitespace-pre-wrap selection:bg-brand-primary/10 italic">
-             {isEditing ? (
-               <textarea
-                 className="w-full h-full p-8 bg-zinc-50 rounded-3xl focus:ring-4 focus:ring-brand-primary/10 outline-none font-medium leading-relaxed resize-none border-2 border-transparent text-zinc-800"
-                 value={script}
-                 onChange={(e) => setScript(e.target.value)}
-                />
-             ) : (
-                <div className="space-y-6">
-                  {script.split("\n").filter(p => p.trim()).map((para, i) => (
-                    <p key={i}>{para.replace(/[#*]/g, '')}</p>
-                  ))}
-                </div>
-             )}
+          <div className="flex-grow overflow-y-auto p-6 text-[15px] leading-relaxed text-zinc-700 whitespace-pre-wrap">
+            {isEditing ? (
+              <textarea
+                className="w-full h-full p-4 bg-zinc-50 rounded-xl border border-zinc-200 focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/10 outline-none leading-relaxed resize-none text-zinc-800"
+                value={script}
+                onChange={(e) => setScript(e.target.value)}
+                autoFocus
+              />
+            ) : (
+              <div className="space-y-4">
+                {script.split("\n").filter(p => p.trim()).map((para, i) => (
+                  <p key={i}>{para.replace(/[#*]/g, '')}</p>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Summary & Actions */}
-        <div className="flex flex-col gap-10">
-          <div className="card-vibrant h-80 flex flex-col group">
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 pointer-events-none" />
-            <h3 className="text-xl font-black mb-6 flex items-center space-x-3 uppercase tracking-widest relative z-10">
-              <Wand2 className="w-6 h-6" />
-              <span>NARRATIVE STRATEGY</span>
+        {/* Summary + continue */}
+        <div className="flex flex-col gap-4">
+          <div className="card-vibrant flex flex-col max-h-[460px]">
+            <h3 className="font-salena text-sm font-semibold flex items-center gap-2 mb-3 !text-white">
+              <Wand2 className="w-4 h-4" />
+              Summary
             </h3>
-            <div className="relative z-10 text-brand-primary-foreground/80 font-medium italic text-sm leading-relaxed overflow-y-auto pr-2 scrollbar-thin">
-              {summary || "Structuring content for maximum impact..."}
+            <div className="text-white/90 text-sm leading-relaxed overflow-y-auto pr-1">
+              {summary || "Summarising your script..."}
             </div>
           </div>
-          
-          <div className="glass-pane !p-4 bg-white/50 border-dashed border-zinc-300 flex items-center justify-center">
-             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center px-4">
-               Words: {script.split(/\s+/).length} | Narrative Locked
-             </p>
-          </div>
 
-          <motion.button
-            whileHover={{ scale: 1.05, y: -5 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => onNext(script, summary)}
-            className="w-full py-12 btn-primary !rounded-[40px] shadow-2xl flex items-center justify-center gap-4 transition-all"
-          >
-            <span className="text-2xl font-black tracking-tighter uppercase">PROCEED TO AUDIO</span>
-            <ArrowRight className="w-8 h-8" />
-          </motion.button>
+          <button onClick={() => onNext(script, summary)} className="btn-primary btn-lg w-full mt-auto">
+            <span>Continue to audio</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </motion.div>

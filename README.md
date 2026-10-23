@@ -98,9 +98,9 @@ All endpoints are under `/api`. Interactive docs: **http://localhost:8000/docs**
 |--------|----------------------|-----------------------------------------------|---------------------------------|
 | GET    | `/health`            | –                                             | `{status, llmProviders}`        |
 | POST   | `/generate`          | `{prompt, systemPrompt?, responseMimeType?}`  | `{text, provider}`              |
-| POST   | `/topics/basic`      | `{niche, duration, audience?}`                | `{topics: string[]}`            |
-| POST   | `/topics/unique`     | `{niche}`                                     | `{topics: string[]}`            |
-| POST   | `/topics/trending`   | `{niche}`                                     | `{topics: string[]}`            |
+| POST   | `/topics/basic`      | `{niche, duration, audience?, provider?}`     | `{topics: string[]}`            |
+| POST   | `/topics/unique`     | `{niche, provider?}`                          | `{topics: string[]}`            |
+| POST   | `/topics/trending`   | `{niche, provider?}`                          | `{topics: string[]}`            |
 | GET    | `/trends`            | `?q=`                                         | Raw SerpApi Google Trends JSON  |
 | GET    | `/news`              | `?q=`                                         | `{headlines: string[]}`         |
 | POST   | `/script`            | `{topic, niche, duration, style}`             | `{script}`                      |
