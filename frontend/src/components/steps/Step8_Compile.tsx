@@ -4,14 +4,20 @@ import { Cpu, Layers, Music, Check, Play, Film } from "lucide-react";
 import LoadingDonut from "../ui/LoadingDonut";
 import StepHeader from "../ui/StepHeader";
 import Notice from "../ui/Notice";
-import { compileVideo } from "../../services/api";
+import { describeAIError, type AIChoice } from "../../lib/aiSelection";
+import { compileVideo, type CompileProvider } from "../../services/api";
 
 interface Scene {
   id: number;
+  text?: string;
   videoUrl?: string | null;
 }
 
 interface Step8Props {
+  /** The renderer picked in the popup. */
+  ai: AIChoice<CompileProvider>;
+  /** Reopens the AI popup. */
+  onChangeAI: () => void;
   scenes: Scene[];
   audioUrl: string;
   onNext: (finalUrl: string) => void;
@@ -22,11 +28,11 @@ const RENDER_STAGES = [
   { p: 10, s: "Checking clips..." },
   { p: 30, s: "Stitching scenes together..." },
   { p: 50, s: "Adding narration..." },
-  { p: 75, s: "Applying colour grading..." },
+  { p: 75, s: "Syncing scenes to the voice-over..." },
   { p: 90, s: "Encoding final video..." },
 ];
 
-export default function Step8_Compile({ scenes, audioUrl, onNext }: Step8Props) {
+export default function Step8_Compile({ ai, onChangeAI, scenes, audioUrl, onNext }: Step8Props) {
   const [isCompiling, setIsCompiling] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("");
@@ -37,21 +43,26 @@ export default function Step8_Compile({ scenes, audioUrl, onNext }: Step8Props) 
     setIsCompiling(true);
     setError(null);
     setProgress(0);
-    setStatus("Starting renderer...");
+    setStatus(`Starting ${ai.label}...`);
 
+    // The render runs on the server while the stages below show progress.
+    const render = compileVideo(scenes, audioUrl, ai.id);
+    let done = false;
+    render.finally(() => { done = true; }).catch(() => {});
     for (const stage of RENDER_STAGES) {
-      await new Promise(r => setTimeout(r, 1000));
+      if (done) break;
+      await new Promise(r => setTimeout(r, 1500));
       setProgress(stage.p);
       setStatus(stage.s);
     }
 
     try {
-      setFinalUrl(await compileVideo(scenes, audioUrl));
+      setFinalUrl(await render);
       setProgress(100);
       setStatus("Your video is ready");
     } catch (e) {
       console.error("Compile Error:", e);
-      setError("Rendering failed. Please try again.");
+      setError(describeAIError(e, ai, "render the video"));
       setIsCompiling(false);
     }
   };
@@ -72,11 +83,16 @@ export default function Step8_Compile({ scenes, audioUrl, onNext }: Step8Props) 
         icon={<Cpu />}
         eyebrow="Step 7 · Render"
         title="Render final video"
-        description="Combine your clips and narration into one video."
+        description={`Combine your clips and narration into one video with ${ai.label}.`}
         tone="berry"
       />
 
-      {error && <Notice className="mb-6" onDismiss={() => setError(null)}>{error}</Notice>}
+      {error && (
+        <Notice className="mb-6" onDismiss={() => setError(null)}>
+          {error}{" "}
+          <button onClick={onChangeAI} className="underline font-semibold">Choose another AI</button>
+        </Notice>
+      )}
 
       <div className="glass-pane">
         {!isCompiling && !finalUrl ? (

@@ -21,7 +21,19 @@ from core.config import Settings
 from core.images import LeonardoClient
 from core.llm import LLMProvider, LLMRouter
 from core.llm.providers import GeminiProvider, GroqProvider, OpenAIProvider
+from core.local import (
+    FFmpegCompiler,
+    KdenliveCompiler,
+    LocalWorkerClient,
+    MediaStore,
+    MoviePyCompiler,
+    OllamaClient,
+    RenderSpec,
+    provider_resolver,
+)
+from core.local.ollama import OllamaProvider
 from core.services import (
+    AIOptionsService,
     ImageService,
     ProjectExporter,
     ResearchService,
@@ -48,6 +60,7 @@ class Services:
     images: ImageService
     video: VideoService
     project_export: ProjectExporter
+    ai_options: AIOptionsService
 
 
 def build_services(settings: Settings, http: httpx.AsyncClient) -> Services:
@@ -78,7 +91,13 @@ def build_services(settings: Settings, http: httpx.AsyncClient) -> Services:
     if groq:
         available["groq"] = GroqProvider(groq, settings.groq_text_model)
 
-    providers = [available[name] for name in settings.provider_order if name in available]
+    # Local text generation: any Ollama model can be picked by name ("ollama:<model>").
+    ollama = OllamaClient(http, settings.ollama_url, settings.ollama_num_ctx)
+    if settings.ollama_default_model:
+        available["ollama"] = OllamaProvider(ollama, settings.ollama_default_model)
+
+    order = settings.provider_order + ([] if "ollama" in settings.provider_order else ["ollama"])
+    providers = [available[name] for name in order if name in available]
     if not providers:
         logger.warning("No LLM provider is configured - text generation will fail.")
     else:
@@ -91,8 +110,19 @@ def build_services(settings: Settings, http: httpx.AsyncClient) -> Services:
         else None
     )
 
-    llm = LLMRouter(providers)
+    llm = LLMRouter(providers, resolver=provider_resolver(ollama))
     research = ResearchService(http, settings.serpapi_key)
+
+    # Local voice / image / video models run on the GPU worker; outputs go to the media folder.
+    worker = LocalWorkerClient(http, settings.local_ai_url, settings.local_ai_timeout_seconds)
+    media = MediaStore(settings.media_dir, http)
+    spec = RenderSpec(settings.video_width, settings.video_height, settings.video_fps)
+    ffmpeg = FFmpegCompiler(settings.ffmpeg_path, spec)
+    video = VideoService(
+        worker=worker,
+        media=media,
+        compilers=[ffmpeg, MoviePyCompiler(spec), KdenliveCompiler(ffmpeg, settings.melt_path)],
+    )
 
     return Services(
         llm=llm,
@@ -100,7 +130,7 @@ def build_services(settings: Settings, http: httpx.AsyncClient) -> Services:
         topics=TopicService(llm, research),
         scripts=ScriptService(llm),
         scenes=SceneService(llm),
-        tts=TextToSpeechService(http, settings.unreal_speech_api_key),
+        tts=TextToSpeechService(http, settings.unreal_speech_api_key, worker=worker, media=media),
         images=ImageService(
             http=http,
             gemini=gemini,
@@ -108,7 +138,23 @@ def build_services(settings: Settings, http: httpx.AsyncClient) -> Services:
             openai=openai,
             openai_model=settings.openai_image_model,
             leonardo=leonardo,
+            worker=worker,
         ),
-        video=VideoService(),
-        project_export=ProjectExporter(http),
+        video=video,
+        project_export=ProjectExporter(http, media),
+        # Provider id -> API key, used to tell the user which AIs they can pick.
+        ai_options=AIOptionsService(
+            http,
+            {
+                "gemini": settings.gemini_api_key,
+                "openai": settings.openai_api_key,
+                "groq": settings.groq_api_key,
+                "leonardo": settings.leonardo_api_key,
+                "unrealspeech": settings.unreal_speech_api_key,
+            },
+            ollama=ollama,
+            worker=worker,
+            compiler_problem=video.compiler_problem,
+            local_only=settings.local_only,
+        ),
     )

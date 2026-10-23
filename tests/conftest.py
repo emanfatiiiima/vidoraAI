@@ -16,7 +16,9 @@ from fastapi.testclient import TestClient
 from core import Services
 from core.config import Settings
 from core.llm import LLMProvider, LLMRequest, LLMRouter
+from core.local import OllamaClient, provider_resolver
 from core.services import (
+    AIOptionsService,
     ImageService,
     ProjectExporter,
     ResearchService,
@@ -54,9 +56,9 @@ def fake_llm() -> FakeProvider:
 @pytest.fixture
 def services(fake_llm: FakeProvider) -> Services:
     """A Services bundle wired to the fake LLM and with no external API keys."""
-    llm = LLMRouter([fake_llm])
     # Offline HTTP: every outbound request gets a 404, so tests never hit the network.
     http = httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(404)))
+    llm = LLMRouter([fake_llm], resolver=provider_resolver(OllamaClient(http, "http://ollama.test")))
     research = ResearchService(http, serpapi_key=None)
     return Services(
         llm=llm,
@@ -68,6 +70,7 @@ def services(fake_llm: FakeProvider) -> Services:
         images=ImageService(http=http, gemini=None, gemini_model="", openai=None, openai_model=""),
         video=VideoService(clip_delay_seconds=0, compile_delay_seconds=0),
         project_export=ProjectExporter(http),
+        ai_options=AIOptionsService(http, {"groq": "test-key"}),
     )
 
 

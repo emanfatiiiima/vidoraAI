@@ -59,6 +59,15 @@ function toApiError(error: unknown): ApiError {
   return new ApiError(error instanceof Error ? error.message : String(error), 0, "unknown_error");
 }
 
+async function get<T>(url: string): Promise<T> {
+  try {
+    const res = await http.get<T>(url);
+    return res.data;
+  } catch (error) {
+    throw toApiError(error);
+  }
+}
+
 async function post<T>(url: string, body: unknown): Promise<T> {
   try {
     const res = await http.post<T>(url, body);
@@ -69,11 +78,63 @@ async function post<T>(url: string, body: unknown): Promise<T> {
 }
 
 // ---------------------------------------------------------------------------
-// Step 2 - Topics
+// AI selection (popup before Step 1)
 // ---------------------------------------------------------------------------
 
-/** Text AI the user can pick. The backend uses only that one (no fallback). */
-export type AIProvider = "gemini" | "openai" | "groq";
+/** Text AI the user can pick: a cloud AI or any local Ollama model. No fallback. */
+export type AIProvider = "gemini" | "openai" | "groq" | `ollama:${string}`;
+
+/** Voice-over AI the user can pick (UnrealSpeech is cloud, the rest run locally). */
+export type VoiceProvider = "unrealspeech" | "kokoro" | "piper" | "xtts" | "melo" | "bark";
+
+/** Image AI the user can pick. The backend uses only that one (no fallback). */
+export type ImageProvider = "openai" | "leonardo" | "gemini" | "sd15" | "sdxl-turbo" | "sdxl" | "flux-schnell";
+
+/** Local image-to-video model. */
+export type VideoProvider = "ltx-video" | "svd-xt" | "wan-1.3b" | "cogvideox-2b";
+
+/** Tool that renders the final video. */
+export type CompileProvider = "ffmpeg" | "moviepy" | "kdenlive";
+
+/** Tasks the user picks an AI for. */
+export type AITaskId = "topics" | "script" | "voice" | "image" | "video" | "compile";
+
+/** One AI option and whether it can be used right now. */
+export interface ProviderStatus {
+  id: string;
+  label: string;
+  available: boolean;
+  /** Why it can't be used (e.g. missing API key, model not downloaded). */
+  reason: string | null;
+  /** Runs on this machine (no API key, no internet). */
+  local: boolean;
+  /** Short tip about speed / quality. */
+  note: string | null;
+}
+
+/** A task with its AI options. */
+export interface AITaskOptions {
+  id: AITaskId;
+  label: string;
+  /** Not implemented yet - shown but can't be picked. */
+  comingSoon: boolean;
+  options: ProviderStatus[];
+}
+
+/** Every task with its AI options (availability = API key set / local model ready). */
+export async function fetchAIOptions(): Promise<AITaskOptions[]> {
+  const res = await get<{ tasks: AITaskOptions[] }>("/ai-options");
+  return res.tasks;
+}
+
+/** Check that a provider actually works (API key accepted / local model running). */
+export async function verifyAIProvider(provider: string): Promise<ProviderStatus> {
+  return post<ProviderStatus>("/ai-options/verify", { provider });
+}
+
+// ---------------------------------------------------------------------------
+// Step 2 - Topics
+// ---------------------------------------------------------------------------
 
 /** 10 evergreen topic ideas for a niche. */
 export async function fetchBasicTopics(niche: string, duration: string, provider?: AIProvider): Promise<string[]> {
@@ -102,6 +163,7 @@ export interface ScriptParams {
   niche: string;
   duration: string;
   style: string;
+  provider?: AIProvider;
 }
 
 /** Generate the voice-over script for a topic. */
@@ -111,8 +173,8 @@ export async function generateScript(params: ScriptParams): Promise<string> {
 }
 
 /** Short "narrative strategy" summary of a script. */
-export async function summarizeScript(script: string): Promise<string> {
-  const data = await post<{ summary: string }>("/script/summary", { script });
+export async function summarizeScript(script: string, provider?: AIProvider): Promise<string> {
+  const data = await post<{ summary: string }>("/script/summary", { script, provider });
   return data.summary;
 }
 
@@ -137,9 +199,24 @@ export interface TTSParams {
   voice: string;
   speed: number;
   pitch: number;
+  provider: VoiceProvider;
 }
 
-/** Narrate the script. Returns the URL of the generated MP3. */
+/** A voice offered by a voice-over AI. */
+export interface Voice {
+  id: string;
+  name: string;
+  desc: string;
+  type: string;
+}
+
+/** Voices of a voice-over AI. */
+export async function fetchVoices(provider: VoiceProvider): Promise<Voice[]> {
+  const data = await get<{ voices: Voice[] }>(`/tts/voices?provider=${encodeURIComponent(provider)}`);
+  return data.voices;
+}
+
+/** Narrate the script. Returns the URL of the generated audio (MP3 or WAV). */
 export async function generateSpeech(params: TTSParams): Promise<string> {
   const data = await post<{ OutputUri?: string }>("/tts", params);
   if (!data.OutputUri) throw new ApiError("No URL returned from API", 200, "invalid_response");
@@ -150,23 +227,17 @@ export async function generateSpeech(params: TTSParams): Promise<string> {
 // Step 5 - Scenes & images
 // ---------------------------------------------------------------------------
 
-/** Split the script into `sceneCount` scene texts. */
-export async function splitScriptIntoScenes(script: string, sceneCount: number): Promise<string[]> {
-  const data = await post<{ scenes: string[] }>("/scenes/split", { script, sceneCount });
+/** Split the script into `sceneCount` scene texts (with the user's script AI). */
+export async function splitScriptIntoScenes(script: string, sceneCount: number, provider?: AIProvider): Promise<string[]> {
+  const data = await post<{ scenes: string[] }>("/scenes/split", { script, sceneCount, provider });
   return data.scenes;
 }
 
-/** Generate a detailed image prompt for one scene. */
-export async function generateScenePrompt(text: string, style: string): Promise<string> {
-  const data = await post<{ prompt: string }>("/scenes/prompt", { text, style });
+/** Generate a detailed image prompt for one scene (with the user's script AI). */
+export async function generateScenePrompt(text: string, style: string, provider?: AIProvider): Promise<string> {
+  const data = await post<{ prompt: string }>("/scenes/prompt", { text, style, provider });
   return data.prompt;
 }
-
-/**
- * Image AI the user can pick. "leonardo" uses only Leonardo (errors are returned);
- * "openai" and "gemini" still use the backend's automatic fallback for now.
- */
-export type ImageProvider = "openai" | "leonardo" | "gemini";
 
 /** Generate an image for a prompt. Returns an image URL (http or data: URI). */
 export async function generateImage(prompt: string, provider?: ImageProvider): Promise<string> {
@@ -178,18 +249,21 @@ export async function generateImage(prompt: string, provider?: ImageProvider): P
 // Steps 6-7 - Video
 // ---------------------------------------------------------------------------
 
-/** Animate a scene image into a video clip. Returns the clip URL. */
-export async function generateSceneVideo(imageUrl: string, prompt: string): Promise<string> {
-  const data = await post<{ url: string }>("/generate-video", { imageUrl, prompt });
+/** Animate a scene image into a video clip with a local model. Returns the clip URL. */
+export async function generateSceneVideo(imageUrl: string, prompt: string, provider: VideoProvider): Promise<string> {
+  const data = await post<{ url: string }>("/generate-video", { imageUrl, prompt, provider });
   return data.url;
 }
 
 /** Stitch all scene clips + narration into the final video. Returns its URL. */
 export async function compileVideo(
-  scenes: { id: number; videoUrl?: string | null }[],
+  scenes: { id: number; videoUrl?: string | null; text?: string }[],
   audioUrl: string,
+  provider: CompileProvider,
 ): Promise<string> {
-  const data = await post<{ url: string }>("/compile-video", { scenes, audioUrl });
+  // Only what the renderer needs (scenes also carry large data: URI images).
+  const payload = scenes.map(({ id, videoUrl, text }) => ({ id, videoUrl, text }));
+  const data = await post<{ url: string }>("/compile-video", { scenes: payload, audioUrl, provider });
   return data.url;
 }
 

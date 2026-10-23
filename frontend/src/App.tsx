@@ -13,7 +13,9 @@ import Step5_Visuals from "./components/steps/Step5_Visuals";
 import Step7_Videos from "./components/steps/Step7_Videos";
 import Step8_Compile from "./components/steps/Step8_Compile";
 import Step9_Download from "./components/steps/Step9_Download";
-import { Sun, Moon, LogOut, Sparkles, ArrowRight } from "lucide-react";
+import AISelectionModal from "./components/AISelectionModal";
+import type { AISelection } from "./lib/aiSelection";
+import { Sun, Moon, LogOut, Sparkles, ArrowRight, Cpu } from "lucide-react";
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'login' | 'signup' | 'forgot' | 'home' | 'videogen'>('login');
@@ -31,6 +33,10 @@ export default function App() {
   const [audioUrl, setAudioUrl] = useState("");
   const [scenes, setScenes] = useState<any[] | null>(null);
   const [finalVideoUrl, setFinalVideoUrl] = useState("");
+  // AIs picked in the popup before Step 1. Kept across projects so the popup
+  // opens pre-filled next time.
+  const [aiSelection, setAISelection] = useState<AISelection | null>(null);
+  const [showAIModal, setShowAIModal] = useState(false);
 
   useEffect(() => {
     if (currentStep > maxStep) {
@@ -71,6 +77,23 @@ export default function App() {
     setTheme(theme === 'light' ? 'dark' : 'light');
   };
 
+  /** Enter the studio: the AI popup comes first, then Step 1. */
+  const startVideoGen = () => {
+    setCurrentPage('videogen');
+    setShowAIModal(true);
+  };
+
+  const handleAIConfirm = (selection: AISelection) => {
+    setAISelection(selection);
+    setShowAIModal(false);
+  };
+
+  /** Closing the popup on first use (nothing picked yet) leaves the studio. */
+  const handleAICancel = () => {
+    setShowAIModal(false);
+    if (!aiSelection) setCurrentPage('home');
+  };
+
   const handleLogin = (email: string) => {
     setUser({ email });
     setCurrentPage('home');
@@ -103,6 +126,11 @@ export default function App() {
         <BrandLogo />
 
         <div className="flex items-center gap-4">
+          {currentPage === 'videogen' && aiSelection && (
+            <button onClick={() => setShowAIModal(true)} className="btn-ghost btn-sm" title="Choose which AI handles each step">
+              <Cpu className="w-3.5 h-3.5" /> <span className="hidden sm:inline">AI models</span>
+            </button>
+          )}
           <button onClick={toggleTheme} className="icon-btn" aria-label="Toggle theme">
             {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
           </button>
@@ -140,7 +168,7 @@ export default function App() {
                 <motion.button
                   whileHover={{ y: -3 }}
                   whileTap={{ scale: 0.99 }}
-                  onClick={() => setCurrentPage('videogen')}
+                  onClick={startVideoGen}
                   className="group glass-pane text-left flex flex-col justify-between min-h-64 relative overflow-hidden hover:shadow-lg"
                 >
                   <div className="w-12 h-12 bg-zinc-900 rounded-2xl flex items-center justify-center text-white shadow-md">
@@ -203,9 +231,11 @@ export default function App() {
                       }}
                     />
                   )}
-                  {currentStep === 2 && inputs && (
+                  {currentStep === 2 && inputs && aiSelection && (
                     <Step2_Topics
                       key="step2"
+                      ai={aiSelection.topics}
+                      onChangeAI={() => setShowAIModal(true)}
                       niche={inputs.niche}
                       duration={`${inputs.duration} ${inputs.durationUnit}`}
                       initialTopics={topics}
@@ -217,9 +247,11 @@ export default function App() {
                       }}
                     />
                   )}
-                  {currentStep === 3 && inputs && (
+                  {currentStep === 3 && inputs && aiSelection && (
                     <Step3_Script
                       key="step3"
+                      ai={aiSelection.script}
+                      onChangeAI={() => setShowAIModal(true)}
                       topic={selectedTopic}
                       niche={inputs.niche}
                       style={inputs.style}
@@ -232,9 +264,11 @@ export default function App() {
                       }}
                     />
                   )}
-                  {currentStep === 4 && (
+                  {currentStep === 4 && aiSelection && (
                     <Step4_Audio
                       key="step4"
+                      ai={aiSelection.voice}
+                      onChangeAI={() => setShowAIModal(true)}
                       script={script}
                       initialAudio={audioUrl}
                       onNext={(url) => {
@@ -243,9 +277,12 @@ export default function App() {
                       }}
                     />
                   )}
-                  {currentStep === 5 && inputs && (
+                  {currentStep === 5 && inputs && aiSelection && (
                     <Step5_Visuals
                       key="step5"
+                      textAi={aiSelection.script}
+                      imageAi={aiSelection.image}
+                      onChangeAI={() => setShowAIModal(true)}
                       script={script}
                       sceneCount={inputs.sceneCount}
                       style={inputs.style}
@@ -255,8 +292,10 @@ export default function App() {
                       }}
                     />
                   )}
-                  {currentStep === 6 && scenes && (
+                  {currentStep === 6 && scenes && aiSelection && (
                     <Step7_Videos
+                      ai={aiSelection.video}
+                      onChangeAI={() => setShowAIModal(true)}
                       scenes={scenes}
                       onNext={(updated) => {
                         setScenes(updated);
@@ -264,8 +303,10 @@ export default function App() {
                       }}
                     />
                   )}
-                  {currentStep === 7 && scenes && (
+                  {currentStep === 7 && scenes && aiSelection && (
                     <Step8_Compile
+                      ai={aiSelection.compile}
+                      onChangeAI={() => setShowAIModal(true)}
                       scenes={scenes}
                       audioUrl={audioUrl}
                       onNext={(url) => {
@@ -299,6 +340,11 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {/* AI selection popup - before Step 1, or reopened from the header / an error */}
+      {currentPage === 'videogen' && showAIModal && (
+        <AISelectionModal initial={aiSelection} onConfirm={handleAIConfirm} onCancel={handleAICancel} />
+      )}
 
       {/* Background Decor */}
       <div className="fixed -z-10 top-0 left-0 w-full h-full overflow-hidden pointer-events-none">

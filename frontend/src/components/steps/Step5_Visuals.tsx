@@ -6,35 +6,14 @@ import StepHeader from "../ui/StepHeader";
 import StepFooter from "../ui/StepFooter";
 import Notice from "../ui/Notice";
 import { cn } from "../../lib/utils";
+import { describeAIError, isProviderError, type AIChoice } from "../../lib/aiSelection";
 import {
-  ApiError,
   generateImage as requestImage,
   generateScenePrompt,
-  isRateLimitError,
   splitScriptIntoScenes,
+  type AIProvider,
   type ImageProvider,
 } from "../../services/api";
-
-const IMAGE_AI_OPTIONS: { id: ImageProvider; label: string }[] = [
-  { id: "openai", label: "ChatGPT" },
-  { id: "leonardo", label: "Leonardo" },
-  { id: "gemini", label: "Gemini" },
-];
-
-/** Turn a failed image request into a message that tells the user what to do next. */
-function imageErrorMessage(error: unknown, provider: ImageProvider): string {
-  const name = IMAGE_AI_OPTIONS.find(o => o.id === provider)!.label;
-  if (error instanceof ApiError && error.code === "network_error") {
-    return "Failed to reach the server. Please check your connection.";
-  }
-  if (error instanceof ApiError && error.code === "provider_not_configured") {
-    return `${name} is not configured on the server. Please choose another AI.`;
-  }
-  if (isRateLimitError(error)) {
-    return `${name} hit its quota limit. Wait a moment or choose another AI.`;
-  }
-  return `${name} couldn't generate the image. Try again or choose another AI.`;
-}
 
 interface Scene {
   id: number;
@@ -48,29 +27,42 @@ interface Step6Props {
   script: string;
   sceneCount: number;
   style: string;
+  /** Script AI from the popup - splits the script and writes the image prompts. */
+  textAi: AIChoice<AIProvider>;
+  /** Image AI from the popup - renders every scene image. */
+  imageAi: AIChoice<ImageProvider>;
+  /** Reopens the AI popup (offered when an AI fails). */
+  onChangeAI: () => void;
   onNext: (updatedScenes: Scene[]) => void;
   key?: string;
 }
 
-export default function Step6_Images({ script, sceneCount, style, onNext }: Step6Props) {
+export default function Step6_Images({ script, sceneCount, style, textAi, imageAi, onChangeAI, onNext }: Step6Props) {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [isSplitting, setIsSplitting] = useState(true);
   const [isGenerating, setIsGenerating] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
-  // The image AI the user picked; sent with every image request.
-  const [imageProvider, setImageProvider] = useState<ImageProvider>("openai");
+  // True when the error came from an AI, so offering "Change AI" makes sense.
+  const [aiFailed, setAiFailed] = useState(false);
 
+  /** Show an AI failure with the right wording. */
+  const reportError = (e: unknown, ai: AIChoice, action: string) => {
+    setError(describeAIError(e, ai, action));
+    setAiFailed(isProviderError(e));
+  };
+
+  // Split on arrival - and again if the user switched AI after a failed split.
   useEffect(() => {
-    splitScript();
-  }, [script]);
+    if (scenes.length === 0) splitScript();
+  }, [script, textAi.id]);
 
   const splitScript = async () => {
     setIsSplitting(true);
     setError(null);
     try {
-      // The backend splits the script with AI (and falls back to an even
-      // sentence split if needed) - see core/services/scenes.py.
-      const chunks = await splitScriptIntoScenes(script, sceneCount);
+      // The backend splits the script with the user's script AI (and falls back
+      // to an even sentence split if the answer can't be parsed) - see core/services/scenes.py.
+      const chunks = await splitScriptIntoScenes(script, sceneCount, textAi.id);
 
       const initial: Scene[] = chunks.map((text, i) => ({
         id: i + 1,
@@ -89,7 +81,7 @@ export default function Step6_Images({ script, sceneCount, style, onNext }: Step
       }
     } catch (e) {
       console.error("Split Error:", e);
-      setError("Couldn't split the script into scenes. Please go back and try again.");
+      reportError(e, textAi, "split the script into scenes");
     } finally {
       setIsSplitting(false);
     }
@@ -101,7 +93,7 @@ export default function Step6_Images({ script, sceneCount, style, onNext }: Step
     setScenes([...updated]);
 
     try {
-      updated[index].prompt = await generateScenePrompt(updated[index].text, style);
+      updated[index].prompt = await generateScenePrompt(updated[index].text, style, textAi.id);
       updated[index].status = 'ready';
     } catch (e) {
       console.error("Sequential Gen Error:", e);
@@ -115,7 +107,7 @@ export default function Step6_Images({ script, sceneCount, style, onNext }: Step
     setIsGenerating(prev => ({ ...prev, [index]: true }));
     setError(null);
     try {
-      const url = await requestImage(scenes[index].prompt, imageProvider);
+      const url = await requestImage(scenes[index].prompt, imageAi.id);
 
       const updated = [...scenes];
       updated[index].selectedImage = url;
@@ -123,7 +115,7 @@ export default function Step6_Images({ script, sceneCount, style, onNext }: Step
       return true;
     } catch (err) {
       console.error("Image Gen Error:", err);
-      setError(imageErrorMessage(err, imageProvider));
+      reportError(err, imageAi, "generate the image");
       return false;
     } finally {
       setIsGenerating(prev => ({ ...prev, [index]: false }));
@@ -165,29 +157,20 @@ export default function Step6_Images({ script, sceneCount, style, onNext }: Step
               {isBusy ? <Spinner /> : <Sparkles className="w-4 h-4" />}
               <span>{isBusy ? "Generating..." : "Generate all images"}</span>
             </button>
-            <div className="inline-flex items-center gap-1 p-1 bg-white/70 rounded-xl border border-black/5" role="group" aria-label="Image AI">
-              {IMAGE_AI_OPTIONS.map(option => (
-                <button
-                  key={option.id}
-                  onClick={() => setImageProvider(option.id)}
-                  disabled={isBusy}
-                  aria-pressed={imageProvider === option.id}
-                  title={`Generate images with ${option.label}`}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:cursor-not-allowed",
-                    imageProvider === option.id ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"
-                  )}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+            <span className="chip self-center">Images by {imageAi.label}</span>
             <span className="self-center text-sm text-zinc-500">{readyCount} of {scenes.length} ready</span>
           </>
         }
       />
 
-      {error && <Notice className="mb-6" onDismiss={() => setError(null)}>{error}</Notice>}
+      {error && (
+        <Notice className="mb-6" onDismiss={() => setError(null)}>
+          {error}{" "}
+          {aiFailed && (
+            <button onClick={onChangeAI} className="font-semibold underline underline-offset-2">Choose another AI</button>
+          )}
+        </Notice>
+      )}
 
       <div className="space-y-5">
         {scenes.map((scene, index) => (

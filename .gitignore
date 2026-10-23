@@ -21,3 +21,8 @@ __pycache__/
 .DS_Store
 Thumbs.db
 *.log
+
+# --- Local AI (see LOCAL_SETUP.md) ---
+media/
+local_ai/.venv*/
+local_ai/models/

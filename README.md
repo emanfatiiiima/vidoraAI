@@ -6,13 +6,15 @@ It takes you from a niche idea to a finished video through a guided pipeline:
 | # | Step       | What happens                                                   | Powered by                     |
 |---|------------|----------------------------------------------------------------|--------------------------------|
 | 1 | Start      | Choose niche, style, duration, aspect ratio, scene count       | —                              |
-| 2 | Topic      | Basic / unique / trending topic ideas (news + Google Trends)   | Gemini → OpenAI → Groq, SerpApi |
+| 2 | Topic      | Basic / unique / trending topic ideas (news + Google Trends)   | Ollama (local) or Gemini / OpenAI / Groq, SerpApi |
 | 3 | Narrative  | Voice-over script + summary, export as TXT / DOCX              | LLM, python-docx               |
-| 4 | Audio      | Narration with 6 voices, speed & pitch controls                | UnrealSpeech                   |
-| 5 | Visuals    | Script split into scenes, image prompt + image per scene       | LLM, Gemini / DALL-E / Pollinations |
-| 6 | Motion     | Scene image → video clip *(simulated)*                         | placeholder                    |
-| 7 | Finalize   | Stitch clips + narration into the final video *(simulated)*    | placeholder                    |
+| 4 | Audio      | Narration, voice + speed (+ pitch for UnrealSpeech)            | Kokoro, Piper, XTTS-v2, MeloTTS, Bark (local) or UnrealSpeech |
+| 5 | Visuals    | Script split into scenes, image prompt + image per scene       | LLM, SDXL Turbo / SDXL / SD 1.5 / FLUX.1-schnell (local) or Gemini / DALL-E / Leonardo |
+| 6 | Motion     | Scene image → video clip                                       | LTX-Video, SVD-XT, Wan 2.1 1.3B, CogVideoX-2B (local) |
+| 7 | Finalize   | Stitch clips + narration into the final video                  | FFmpeg, MoviePy or Kdenlive (MLT) |
 | 8 | Download   | Download a ZIP with details (Excel), script, images, clips, audio & final video | openpyxl        |
+
+> **Run everything locally (no API keys):** see [LOCAL_SETUP.md](LOCAL_SETUP.md) for the step-by-step guide.
 
 ---
 
@@ -247,6 +249,6 @@ See **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** for step-by-step walkthroughs.
 
 ## Known limitations
 
-- **Video generation and compilation are simulated.** They return placeholder clips (see `core/services/video.py`).
+- **Video generation and compilation need the local setup.** Without a picked video model/renderer they are simulated (see `core/services/video.py`).
 - **Authentication is mocked** in the frontend (`src/components/auth/Login.tsx`).
 - **News headlines are scraped** from Google News HTML, which can break if Google changes its markup.

@@ -12,7 +12,7 @@ in the UI). In that case no fallback happens: if it fails, the error is raised.
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from core.exceptions import (
     AllProvidersFailedError,
@@ -27,8 +27,20 @@ logger = logging.getLogger(__name__)
 class LLMRouter:
     """Tries each provider in order and returns the first successful answer."""
 
-    def __init__(self, providers: Sequence[LLMProvider]) -> None:
+    def __init__(
+        self,
+        providers: Sequence[LLMProvider],
+        resolver: Callable[[str], LLMProvider | None] | None = None,
+    ) -> None:
+        """
+        Args:
+            providers: providers used by the automatic fallback chain, in order.
+            resolver: creates a provider on demand for a name that isn't in
+                ``providers`` (e.g. ``"ollama:qwen3:8b"`` - Ollama models can be
+                pulled while the server runs).
+        """
         self._providers = list(providers)
+        self._resolver = resolver
 
     @property
     def provider_names(self) -> list[str]:
@@ -76,6 +88,8 @@ class LLMRouter:
     async def _generate_with(self, name: str, request: LLMRequest) -> LLMResponse:
         """Generate with the single provider called ``name`` (no fallback)."""
         selected = next((p for p in self._providers if p.name == name), None)
+        if selected is None and self._resolver is not None:
+            selected = self._resolver(name)
         if selected is None:
             raise ProviderNotConfiguredError(
                 f"The {name} provider is not configured.", details={"provider": name}

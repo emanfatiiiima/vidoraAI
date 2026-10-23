@@ -117,3 +117,56 @@ def test_project_export_zip(client) -> None:
     assert workbook["Scenes"]["C2"].value == "p1"
     statuses = {row[0]: row[1] for row in workbook["Files"].iter_rows(min_row=2, values_only=True)}
     assert statuses["audio/narration.mp3"].startswith("missing")
+
+
+# ---------------------------------------------------------------------- #
+# AI selection popup
+# ---------------------------------------------------------------------- #
+def test_ai_options_marks_providers_without_key_unavailable(client) -> None:
+    tasks = {t["id"]: t for t in client.get("/api/ai-options").json()["tasks"]}
+    assert list(tasks) == ["topics", "script", "voice", "image", "video", "compile"]
+    topics = {o["id"]: o for o in tasks["topics"]["options"]}
+    # The test services only have a Groq key.
+    assert topics["groq"]["available"] is True
+    assert topics["gemini"]["available"] is False
+    assert "GEMINI_API_KEY" in topics["gemini"]["reason"]
+    # No Ollama / GPU worker in tests: local options are listed but unavailable.
+    assert topics["ollama"]["available"] is False and topics["ollama"]["local"] is True
+    video = {o["id"]: o for o in tasks["video"]["options"]}
+    assert set(video) == {"ltx-video", "svd-xt", "wan-1.3b", "cogvideox-2b"}
+    assert all(not o["available"] for o in video.values())
+    assert {o["id"] for o in tasks["compile"]["options"]} == {"ffmpeg", "moviepy", "kdenlive"}
+
+
+def test_tts_voices_per_provider(client) -> None:
+    kokoro = client.get("/api/tts/voices", params={"provider": "kokoro"}).json()["voices"]
+    assert kokoro[0]["id"] == "af_heart"
+    unreal = client.get("/api/tts/voices").json()["voices"]
+    assert unreal[0]["id"] == "Sierra"
+
+
+def test_local_tts_without_worker_returns_503(client) -> None:
+    response = client.post("/api/tts", json={"text": "hello", "provider": "kokoro"})
+    assert response.status_code == 503
+    assert response.json()["code"] == "provider_not_configured"
+
+
+def test_ollama_provider_id_is_accepted_and_bad_ids_rejected(client) -> None:
+    ok = client.post("/api/script/summary", json={"script": "x", "provider": "ollama:qwen3:8b"})
+    assert ok.status_code == 502  # resolved, then the (offline) Ollama call fails
+    assert ok.json()["code"] == "provider_failed"
+    bad = client.post("/api/script/summary", json={"script": "x", "provider": "mystery"})
+    assert bad.status_code == 422
+
+
+def test_verify_reports_invalid_key(client) -> None:
+    # The offline HTTP mock answers every request with 404 -> provider error.
+    status = client.post("/api/ai-options/verify", json={"provider": "groq"}).json()
+    assert status["available"] is False
+    assert "Groq" in status["reason"]
+
+
+def test_image_with_unconfigured_provider_returns_503(client) -> None:
+    response = client.post("/api/generate-image", json={"prompt": "a fox", "provider": "gemini"})
+    assert response.status_code == 503
+    assert response.json()["code"] == "provider_not_configured"

@@ -1,0 +1,4 @@
+# Keep the CUDA build of PyTorch installed in step 4 (must match that command).
+torch==2.8.0
+torchvision==0.23.0
+torchaudio==2.8.0

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
+from core.services.video import CompileClip
 from fastapi_backend.dependencies import ServicesDep
 from fastapi_backend.schemas import (
     CompileRequest,
@@ -14,6 +15,7 @@ from fastapi_backend.schemas import (
     UrlResponse,
     VideoRequest,
     VideoResponse,
+    VoicesResponse,
 )
 
 router = APIRouter(tags=["media"])
@@ -21,8 +23,14 @@ router = APIRouter(tags=["media"])
 
 @router.post("/tts")
 async def text_to_speech(body: TTSRequest, services: ServicesDep) -> dict[str, Any]:
-    """Narrate text with UnrealSpeech. Returns UnrealSpeech's JSON (incl. ``OutputUri``)."""
-    return await services.tts.synthesize(body.text, body.voice, body.speed, body.pitch)
+    """Narrate text with UnrealSpeech or a local TTS engine. The answer contains ``OutputUri``."""
+    return await services.tts.synthesize(body.text, body.voice, body.speed, body.pitch, body.provider)
+
+
+@router.get("/tts/voices", response_model=VoicesResponse)
+async def tts_voices(services: ServicesDep, provider: str = Query(default="unrealspeech")) -> VoicesResponse:
+    """Voices offered by a voice-over provider."""
+    return VoicesResponse.model_validate({"voices": services.tts.voices(provider)})
 
 
 @router.post("/generate-image", response_model=UrlResponse)
@@ -33,13 +41,14 @@ async def generate_image(body: ImageRequest, services: ServicesDep) -> UrlRespon
 
 @router.post("/generate-video", response_model=VideoResponse)
 async def generate_video(body: VideoRequest, services: ServicesDep) -> VideoResponse:
-    """Animate a scene image into a clip (currently simulated)."""
-    result = await services.video.generate_clip(body.image_url, body.prompt)
+    """Animate a scene image into a clip with a local video model (simulated without ``provider``)."""
+    result = await services.video.generate_clip(body.image_url, body.prompt, body.provider)
     return VideoResponse(url=result.url, status=result.status)
 
 
 @router.post("/compile-video", response_model=VideoResponse)
 async def compile_video(body: CompileRequest, services: ServicesDep) -> VideoResponse:
-    """Stitch scene clips and narration into the final video (currently simulated)."""
-    result = await services.video.compile([s.video_url for s in body.scenes], body.audio_url)
+    """Stitch scene clips and narration into the final video (simulated without ``provider``)."""
+    clips = [CompileClip(video_url=s.video_url, text=s.text) for s in body.scenes]
+    result = await services.video.compile(clips, body.audio_url, body.provider)
     return VideoResponse(url=result.url, status=result.status)

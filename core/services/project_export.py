@@ -34,6 +34,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 from openpyxl.worksheet.worksheet import Worksheet
 
+from core.local import MediaStore
 from core.utils import fetch_bytes
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,8 @@ _PREFERRED_EXTENSION = {
     "image/webp": ".webp",
     "video/mp4": ".mp4",
     "audio/mpeg": ".mp3",
+    "audio/wav": ".wav",
+    "audio/x-wav": ".wav",
 }
 _DATA_URI_RE = re.compile(r"^data:(?P<mime>[\w/+.-]+)?(?:;[\w=-]+)*;base64,(?P<data>.*)$", re.DOTALL)
 
@@ -106,8 +109,10 @@ class _Asset:
 class ProjectExporter:
     """Builds the downloadable ZIP package for a finished project."""
 
-    def __init__(self, http: httpx.AsyncClient) -> None:
+    def __init__(self, http: httpx.AsyncClient, media: MediaStore | None = None) -> None:
         self._http = http
+        # Reads locally generated media (``/api/media/...``) straight from disk.
+        self._media = media
 
     async def build_zip(self, project: ProjectData) -> bytes:
         """Download all media and return the ZIP archive as bytes."""
@@ -156,7 +161,9 @@ class ProjectExporter:
         return results
 
     async def _fetch(self, url: str) -> tuple[bytes, str | None]:
-        """Return ``(content, content_type)`` for an http(s) URL or ``data:`` URI."""
+        """Return ``(content, content_type)`` for an http(s) URL, ``data:`` URI or local media URL."""
+        if self._media is not None:
+            return await self._media.read(url)
         if url.startswith("data:"):
             match = _DATA_URI_RE.match(url)
             if not match:

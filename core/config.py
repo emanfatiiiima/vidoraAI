@@ -54,6 +54,32 @@ class Settings(BaseSettings):
     llm_provider_order: str = "gemini,openai,groq"
 
     # ------------------------------------------------------------------ #
+    # Local AI (see LOCAL_SETUP.md)
+    # ------------------------------------------------------------------ #
+    # Hide every cloud provider in the "Choose your AIs" popup.
+    local_only: bool = False
+    # Ollama server; every pulled model becomes a text option ("ollama:<model>").
+    ollama_url: str = "http://127.0.0.1:11434"
+    # Context window for Ollama requests (its default is too small for long scripts).
+    ollama_num_ctx: int = 8192
+    # Ollama model used by automatic (non user-picked) text generation, e.g. "qwen3:8b".
+    ollama_default_model: str | None = None
+    # GPU worker (``python -m local_ai``) for local voice, image and video models.
+    local_ai_url: str = "http://127.0.0.1:8001"
+    # One local video clip can take 10+ minutes on an 8 GB card.
+    local_ai_timeout_seconds: float = 3600.0
+    # Where generated audio, clips and final videos are stored (served at /api/media).
+    media_dir: Path = PROJECT_ROOT / "media"
+    # FFmpeg binary (name on PATH or full path). ffprobe is looked up next to it.
+    ffmpeg_path: str = "ffmpeg"
+    # Kdenlive's MLT renderer; auto-detected when empty.
+    melt_path: str | None = None
+    # Final video size and frame rate (9:16 vertical by default).
+    video_width: int = 1080
+    video_height: int = 1920
+    video_fps: int = 30
+
+    # ------------------------------------------------------------------ #
     # HTTP / server
     # ------------------------------------------------------------------ #
     http_timeout_seconds: float = 60.0
@@ -91,6 +117,8 @@ class Settings(BaseSettings):
         "serpapi_key",
         "unreal_speech_api_key",
         "leonardo_api_key",
+        "ollama_default_model",
+        "melt_path",
         mode="before",
     )
     @classmethod

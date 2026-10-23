@@ -6,49 +6,58 @@ import StepHeader from "../ui/StepHeader";
 import StepFooter from "../ui/StepFooter";
 import Notice from "../ui/Notice";
 import { cn } from "../../lib/utils";
-import { generateSceneVideo } from "../../services/api";
+import { describeAIError, type AIChoice } from "../../lib/aiSelection";
+import { generateSceneVideo, type VideoProvider } from "../../services/api";
 
 interface Scene {
   id: number;
   text: string;
+  prompt?: string;
   selectedImage: string | null;
   videoUrl?: string | null;
 }
 
 interface Step7Props {
+  /** The video AI picked in the popup. */
+  ai: AIChoice<VideoProvider>;
+  /** Reopens the AI popup. */
+  onChangeAI: () => void;
   scenes: Scene[];
   onNext: (updatedScenes: Scene[]) => void;
 }
 
-export default function Step7_Videos({ scenes: initialScenes, onNext }: Step7Props) {
+export default function Step7_Videos({ ai, onChangeAI, scenes: initialScenes, onNext }: Step7Props) {
   const [scenes, setScenes] = useState<Scene[]>(initialScenes);
   const [isGenerating, setIsGenerating] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
 
-  const generateVideo = async (index: number) => {
-    if (!scenes[index].selectedImage) return;
+  /** Generate one clip. Returns false when it failed. */
+  const generateVideo = async (index: number): Promise<boolean> => {
+    const scene = scenes[index];
+    if (!scene.selectedImage) return false;
 
     setIsGenerating(prev => ({ ...prev, [index]: true }));
     setError(null);
     try {
-      const url = await generateSceneVideo(scenes[index].selectedImage!, scenes[index].text);
-
-      const updated = [...scenes];
-      updated[index].videoUrl = url;
-      setScenes(updated);
+      // The scene's image prompt describes the shot best; fall back to its narration.
+      const url = await generateSceneVideo(scene.selectedImage, scene.prompt || scene.text, ai.id);
+      setScenes(prev => prev.map((s, i) => (i === index ? { ...s, videoUrl: url } : s)));
+      return true;
     } catch (err) {
       console.error("Video Gen Error:", err);
-      setError("Couldn't generate the clip. Please try again.");
+      setError(describeAIError(err, ai, `animate scene ${scene.id}`));
+      return false;
     } finally {
       setIsGenerating(prev => ({ ...prev, [index]: false }));
     }
   };
 
   const generateAll = async () => {
+    // One at a time: the GPU runs one model job at a time anyway.
     for (let i = 0; i < scenes.length; i++) {
-       if (!scenes[i].videoUrl && scenes[i].selectedImage) {
-         await generateVideo(i);
-       }
+      if (!scenes[i].videoUrl && scenes[i].selectedImage) {
+        if (!(await generateVideo(i))) break;
+      }
     }
   };
 
@@ -62,7 +71,7 @@ export default function Step7_Videos({ scenes: initialScenes, onNext }: Step7Pro
         icon={<Film />}
         eyebrow="Step 6 · Videos"
         title="Scene clips"
-        description="Turn each scene image into a short animated clip."
+        description={`Turn each scene image into a short animated clip with ${ai.label}. Local video models take a few minutes per clip.`}
         tone="secondary"
         actions={
           <>
@@ -75,7 +84,12 @@ export default function Step7_Videos({ scenes: initialScenes, onNext }: Step7Pro
         }
       />
 
-      {error && <Notice className="mb-6" onDismiss={() => setError(null)}>{error}</Notice>}
+      {error && (
+        <Notice className="mb-6" onDismiss={() => setError(null)}>
+          {error}{" "}
+          <button onClick={onChangeAI} className="underline font-semibold">Choose another AI</button>
+        </Notice>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {scenes.map((scene, index) => (

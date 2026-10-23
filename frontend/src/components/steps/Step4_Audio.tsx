@@ -5,23 +5,19 @@ import { Spinner } from "../ui/LoadingDonut";
 import StepHeader from "../ui/StepHeader";
 import Notice from "../ui/Notice";
 import { cn } from "../../lib/utils";
-import { ApiError, generateSpeech } from "../../services/api";
+import { describeAIError, type AIChoice } from "../../lib/aiSelection";
+import { fetchVoices, generateSpeech, type Voice, type VoiceProvider } from "../../services/api";
 
 interface Step4Props {
+  /** The voice-over AI picked in the popup. */
+  ai: AIChoice<VoiceProvider>;
+  /** Reopens the AI popup. */
+  onChangeAI: () => void;
   script: string;
   onNext: (audioUrl: string) => void;
   initialAudio?: string | null;
   key?: string;
 }
-
-const VOICES = [
-  { id: "Sierra", name: "Sierra", desc: "Professional & balanced", type: "Female" },
-  { id: "Mateo", name: "Mateo", desc: "Deep & authoritative", type: "Male" },
-  { id: "Scarlett", name: "Scarlett", desc: "Expressive & warm", type: "Female" },
-  { id: "Dan", name: "Dan", desc: "Friendly & casual", type: "Male" },
-  { id: "Liv", name: "Liv", desc: "Young & energetic", type: "Female" },
-  { id: "Will", name: "Will", desc: "News anchor style", type: "Male" },
-];
 
 /** Creates an audio element that resets the play button when playback ends. */
 function createAudio(url: string, onEnded: () => void): HTMLAudioElement {
@@ -30,8 +26,9 @@ function createAudio(url: string, onEnded: () => void): HTMLAudioElement {
   return audio;
 }
 
-export default function Step4_Audio({ script, onNext, initialAudio }: Step4Props) {
-  const [voice, setVoice] = useState("Sierra");
+export default function Step4_Audio({ ai, onChangeAI, script, onNext, initialAudio }: Step4Props) {
+  const [voices, setVoices] = useState<Voice[]>([]);
+  const [voice, setVoice] = useState("");
   const [speed, setSpeed] = useState(0); // -1.0 to 1.0
   const [pitch, setPitch] = useState(1.0); // 0.5 to 1.5
   const [isGenerating, setIsGenerating] = useState(false);
@@ -42,8 +39,27 @@ export default function Step4_Audio({ script, onNext, initialAudio }: Step4Props
     initialAudio ? createAudio(initialAudio, () => setIsPlaying(false)) : null
   );
 
+  // Only UnrealSpeech supports pitch; local engines only change the speed.
+  const supportsPitch = ai.id === "unrealspeech";
+
   // Stop playback when leaving this step.
   useEffect(() => () => audioElement?.pause(), [audioElement]);
+
+  // Each voice-over AI has its own voices.
+  useEffect(() => {
+    let cancelled = false;
+    fetchVoices(ai.id)
+      .then(list => {
+        if (cancelled) return;
+        setVoices(list);
+        setVoice(list[0]?.id ?? "");
+      })
+      .catch(e => {
+        console.error("Voices error:", e);
+        if (!cancelled) setError(`Couldn't load the voices of ${ai.label}.`);
+      });
+    return () => { cancelled = true; };
+  }, [ai.id]);
 
   const generateAudio = async () => {
     audioElement?.pause();
@@ -52,13 +68,13 @@ export default function Step4_Audio({ script, onNext, initialAudio }: Step4Props
     setAudioUrl(null);
     setError(null);
     try {
-      // TTS runs on the backend (core/services/audio.py).
-      const url = await generateSpeech({ text: script, voice, speed, pitch });
+      // TTS runs on the backend (core/services/audio.py), locally or in the cloud.
+      const url = await generateSpeech({ text: script, voice, speed, pitch, provider: ai.id });
       setAudioUrl(url);
       setAudioElement(createAudio(url, () => setIsPlaying(false)));
     } catch (e) {
       console.error("Audio Gen Error:", e);
-      setError(`Audio generation failed: ${describeError(e)}`);
+      setError(describeAIError(e, ai, "generate the narration"));
     } finally {
       setIsGenerating(false);
     }
@@ -88,14 +104,20 @@ export default function Step4_Audio({ script, onNext, initialAudio }: Step4Props
         tone="accent"
       />
 
-      {error && <Notice className="mb-6" onDismiss={() => setError(null)}>{error}</Notice>}
+      {error && (
+        <Notice className="mb-6" onDismiss={() => setError(null)}>
+          {error}{" "}
+          <button onClick={onChangeAI} className="underline font-semibold">Choose another AI</button>
+        </Notice>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Voice selection */}
         <div className="space-y-2">
-          <label className="field-label mb-3">Voice</label>
+          <label className="field-label mb-3">Voice · {ai.label}</label>
           <div className="grid grid-cols-1 gap-2">
-            {VOICES.map((v) => {
+            {voices.length === 0 && <Spinner className="w-5 h-5 text-zinc-400" />}
+            {voices.map((v) => {
               const isSelected = voice === v.id;
               return (
                 <button
@@ -145,7 +167,7 @@ export default function Step4_Audio({ script, onNext, initialAudio }: Step4Props
             </div>
           </div>
 
-          <div className="space-y-3">
+          {supportsPitch && <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="field-label">Pitch</label>
               <span className="text-xs font-semibold text-teal-700">{pitch.toFixed(1)}</span>
@@ -164,9 +186,9 @@ export default function Step4_Audio({ script, onNext, initialAudio }: Step4Props
               <span>Neutral</span>
               <span>High</span>
             </div>
-          </div>
+          </div>}
 
-          <button onClick={generateAudio} disabled={isGenerating} className="btn-primary w-full">
+          <button onClick={generateAudio} disabled={isGenerating || !voice} className="btn-primary w-full">
             {isGenerating ? <Spinner /> : <Wand2 className="w-4 h-4" />}
             <span>{isGenerating ? "Generating..." : audioUrl ? "Regenerate audio" : "Generate audio"}</span>
           </button>
@@ -178,7 +200,9 @@ export default function Step4_Audio({ script, onNext, initialAudio }: Step4Props
             <div className="flex flex-col items-center gap-6 w-full">
               <div>
                 <p className="text-white font-semibold text-lg">Voice ready</p>
-                <p className="text-zinc-400 text-sm">{voice} · speed {speed.toFixed(1)} · pitch {pitch.toFixed(1)}</p>
+                <p className="text-zinc-400 text-sm">
+                  {voices.find(v => v.id === voice)?.name ?? voice} · speed {speed.toFixed(1)}{supportsPitch && ` · pitch ${pitch.toFixed(1)}`}
+                </p>
               </div>
 
               <motion.button
@@ -199,19 +223,11 @@ export default function Step4_Audio({ script, onNext, initialAudio }: Step4Props
           ) : (
             <div className="text-zinc-500">
               {isGenerating ? <Spinner className="w-8 h-8 mx-auto mb-3 text-zinc-400" /> : <Volume2 className="w-10 h-10 mx-auto mb-3 opacity-40" />}
-              <p className="text-sm">{isGenerating ? "Generating narration..." : "Your narration preview will appear here"}</p>
+              <p className="text-sm">{isGenerating ? `Generating narration with ${ai.label}...` : "Your narration preview will appear here"}</p>
             </div>
           )}
         </div>
       </div>
     </motion.div>
   );
-}
-
-/** Human-readable message for an audio error (prefers upstream provider details). */
-function describeError(error: unknown): string {
-  if (error instanceof ApiError && error.details) {
-    return typeof error.details === "string" ? error.details : JSON.stringify(error.details);
-  }
-  return error instanceof Error ? error.message : String(error);
 }

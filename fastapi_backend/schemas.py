@@ -8,12 +8,14 @@ snake_case (``scene_count``). This is handled by :class:`ApiModel`.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 from core.services.export import ExportFormat
+from core.services.images import ImageProviderName
+from core.services.video import CompileProviderName, VideoProviderName
 
 
 class ApiModel(BaseModel):
@@ -51,8 +53,9 @@ class GenerateResponse(ApiModel):
 # ---------------------------------------------------------------------- #
 # Topics & research
 # ---------------------------------------------------------------------- #
-#: Text providers the user can pick in the UI. ``None`` = automatic fallback.
-LLMProviderName = Literal["gemini", "openai", "groq"]
+#: Text providers the user can pick in the UI: a cloud AI or any Ollama model
+#: (``ollama:<model>``). ``None`` = automatic fallback.
+LLMProviderName = Annotated[str, Field(pattern=r"^(gemini|openai|groq|ollama:\S+)$")]
 
 
 class BasicTopicsRequest(ApiModel):
@@ -83,6 +86,7 @@ class ScriptRequest(ApiModel):
     niche: str
     duration: str
     style: str
+    provider: LLMProviderName | None = None
 
 
 class ScriptResponse(ApiModel):
@@ -91,6 +95,7 @@ class ScriptResponse(ApiModel):
 
 class SummaryRequest(ApiModel):
     script: str = Field(min_length=1)
+    provider: LLMProviderName | None = None
 
 
 class SummaryResponse(ApiModel):
@@ -109,6 +114,7 @@ class ExportRequest(ApiModel):
 class SplitScenesRequest(ApiModel):
     script: str = Field(min_length=1)
     scene_count: int = Field(ge=1, le=50)
+    provider: LLMProviderName | None = None
 
 
 class SplitScenesResponse(ApiModel):
@@ -118,6 +124,7 @@ class SplitScenesResponse(ApiModel):
 class ScenePromptRequest(ApiModel):
     text: str
     style: str
+    provider: LLMProviderName | None = None
 
 
 class ScenePromptResponse(ApiModel):
@@ -127,16 +134,29 @@ class ScenePromptResponse(ApiModel):
 # ---------------------------------------------------------------------- #
 # Media
 # ---------------------------------------------------------------------- #
+#: Voice-over providers the user can pick in the UI.
+VoiceProviderName = Literal["unrealspeech", "kokoro", "piper", "xtts", "melo", "bark"]
+
+
 class TTSRequest(ApiModel):
     # Emptiness is validated by the core so the error message stays consistent.
     text: str = ""
     voice: str | None = None
     speed: float | None = None
     pitch: float | None = None
+    # ``None`` = UnrealSpeech.
+    provider: VoiceProviderName | None = None
 
 
-#: Image providers the user can pick in the UI. ``None`` = automatic fallback.
-ImageProviderName = Literal["openai", "leonardo", "gemini"]
+class VoiceOut(ApiModel):
+    id: str
+    name: str
+    desc: str
+    type: str
+
+
+class VoicesResponse(ApiModel):
+    voices: list[VoiceOut]
 
 
 class ImageRequest(ApiModel):
@@ -151,17 +171,23 @@ class UrlResponse(ApiModel):
 class VideoRequest(ApiModel):
     image_url: str | None = None
     prompt: str | None = None
+    # ``None`` = simulated clip.
+    provider: VideoProviderName | None = None
 
 
 class CompileScene(ApiModel):
-    # Extra fields sent by the frontend (text, prompt, ...) are ignored.
+    # Extra fields sent by the frontend (prompt, selectedImage, ...) are ignored.
     id: int | None = None
     video_url: str | None = None
+    # Narration of the scene: its length decides how long the scene stays on screen.
+    text: str = ""
 
 
 class CompileRequest(ApiModel):
     scenes: list[CompileScene] = Field(default_factory=list)
     audio_url: str | None = None
+    # ``None`` = simulated render.
+    provider: CompileProviderName | None = None
 
 
 class VideoResponse(ApiModel):
@@ -192,6 +218,33 @@ class ProjectExportRequest(ApiModel):
     audio_url: str | None = None
     final_video_url: str | None = None
     scenes: list[ProjectSceneIn] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------- #
+# AI selection (popup before Step 1)
+# ---------------------------------------------------------------------- #
+class ProviderStatusResponse(ApiModel):
+    id: str
+    label: str
+    available: bool
+    reason: str | None = None
+    local: bool = False
+    note: str | None = None
+
+
+class TaskOptionsResponse(ApiModel):
+    id: str
+    label: str
+    coming_soon: bool
+    options: list[ProviderStatusResponse]
+
+
+class AIOptionsResponse(ApiModel):
+    tasks: list[TaskOptionsResponse]
+
+
+class VerifyProviderRequest(ApiModel):
+    provider: str = Field(min_length=1)
 
 
 class HealthResponse(ApiModel):

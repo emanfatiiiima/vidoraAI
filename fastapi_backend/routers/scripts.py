@@ -21,7 +21,7 @@ router = APIRouter(prefix="/script", tags=["script"])
 async def generate_script(body: ScriptRequest, services: ServicesDep) -> ScriptResponse:
     """Write a TTS-ready voice-over script for the selected topic."""
     script = await services.scripts.generate_script(
-        body.topic, body.niche, body.duration, body.style
+        body.topic, body.niche, body.duration, body.style, provider=body.provider
     )
     return ScriptResponse(script=script)
 
@@ -29,7 +29,7 @@ async def generate_script(body: ScriptRequest, services: ServicesDep) -> ScriptR
 @router.post("/summary", response_model=SummaryResponse)
 async def summarize_script(body: SummaryRequest, services: ServicesDep) -> SummaryResponse:
     """Short summary ("narrative strategy") of a script."""
-    return SummaryResponse(summary=await services.scripts.summarize(body.script))
+    return SummaryResponse(summary=await services.scripts.summarize(body.script, provider=body.provider))
 
 
 @router.post("/export")

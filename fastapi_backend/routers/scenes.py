@@ -18,12 +18,12 @@ router = APIRouter(prefix="/scenes", tags=["scenes"])
 @router.post("/split", response_model=SplitScenesResponse)
 async def split_scenes(body: SplitScenesRequest, services: ServicesDep) -> SplitScenesResponse:
     """Split the script into ``sceneCount`` scene texts."""
-    scenes = await services.scenes.split_script(body.script, body.scene_count)
+    scenes = await services.scenes.split_script(body.script, body.scene_count, provider=body.provider)
     return SplitScenesResponse(scenes=scenes)
 
 
 @router.post("/prompt", response_model=ScenePromptResponse)
 async def scene_prompt(body: ScenePromptRequest, services: ServicesDep) -> ScenePromptResponse:
     """Generate a detailed image prompt for one scene."""
-    prompt = await services.scenes.generate_scene_prompt(body.text, body.style)
+    prompt = await services.scenes.generate_scene_prompt(body.text, body.style, provider=body.provider)
     return ScenePromptResponse(prompt=prompt)

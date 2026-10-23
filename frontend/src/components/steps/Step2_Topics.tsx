@@ -1,31 +1,30 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { TrendingUp, Zap, ChevronRight, Edit3, Check, Sparkles, RotateCcw } from "lucide-react";
+import { TrendingUp, Zap, ChevronRight, Edit3, Check, RotateCcw } from "lucide-react";
 import LoadingDonut, { Spinner } from "../ui/LoadingDonut";
 import StepHeader from "../ui/StepHeader";
 import StepFooter from "../ui/StepFooter";
 import Notice from "../ui/Notice";
 import { cn } from "../../lib/utils";
-import { ApiError, fetchBasicTopics, fetchTrendingTopics, fetchUniqueTopics, isRateLimitError, type AIProvider } from "../../services/api";
+import { describeAIError, isProviderError, type AIChoice } from "../../lib/aiSelection";
+import { fetchBasicTopics, fetchTrendingTopics, fetchUniqueTopics, type AIProvider } from "../../services/api";
 
 type TopicTab = "basic" | "unique" | "trending";
-
-const AI_OPTIONS: { id: AIProvider; label: string }[] = [
-  { id: "gemini", label: "Gemini" },
-  { id: "openai", label: "ChatGPT" },
-  { id: "groq", label: "Groq" },
-];
 
 interface Step2Props {
   niche: string;
   duration: string;
+  /** Topic AI picked in the popup before Step 1. */
+  ai: AIChoice<AIProvider>;
+  /** Reopens the AI popup (offered when the AI fails). */
+  onChangeAI: () => void;
   onNext: (topic: string, cachedTopics: { basic: string[], unique: string[], trending: string[] }) => void;
   initialTopics?: { basic: string[], unique: string[], trending: string[] } | null;
   initialSelection?: string;
   key?: string;
 }
 
-export default function Step2_Topics({ niche, duration, onNext, initialTopics, initialSelection }: Step2Props) {
+export default function Step2_Topics({ niche, duration, ai, onChangeAI, onNext, initialTopics, initialSelection }: Step2Props) {
   const [basicTopics, setBasicTopics] = useState<string[]>(initialTopics?.basic || []);
   const [uniqueTopics, setUniqueTopics] = useState<string[]>(initialTopics?.unique || []);
   const [trendingTopics, setTrendingTopics] = useState<string[]>(initialTopics?.trending || []);
@@ -35,20 +34,19 @@ export default function Step2_Topics({ niche, duration, onNext, initialTopics, i
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The AI the user picked. Calls go to that AI only; if it fails it is disabled and the user picks again.
-  const [provider, setProvider] = useState<AIProvider | null>(null);
-  const [failedProviders, setFailedProviders] = useState<AIProvider[]>([]);
+  // True when the error came from the AI, so offering "Change AI" makes sense.
+  const [aiFailed, setAiFailed] = useState(false);
 
   const topicsByTab: Record<TopicTab, string[]> = { basic: basicTopics, unique: uniqueTopics, trending: trendingTopics };
-  const allProvidersFailed = AI_OPTIONS.every(o => failedProviders.includes(o.id));
 
-  // All prompts, AI calls and trend research run on the backend (core/services/topics.py).
-  const loadTopics = async (tab: TopicTab, ai: AIProvider) => {
+  // All prompts, AI calls and trend research run on the backend (core/services/topics.py),
+  // using only the topic AI the user picked.
+  const loadTopics = async (tab: TopicTab) => {
     const fetchers: Record<TopicTab, () => Promise<string[]>> = {
-      basic: () => fetchBasicTopics(niche, duration, ai),
-      unique: () => fetchUniqueTopics(niche, ai),
+      basic: () => fetchBasicTopics(niche, duration, ai.id),
+      unique: () => fetchUniqueTopics(niche, ai.id),
       // The backend scrapes news + Google Trends, then asks the AI for 10 topics.
-      trending: () => fetchTrendingTopics(niche, ai),
+      trending: () => fetchTrendingTopics(niche, ai.id),
     };
     const setters: Record<TopicTab, (topics: string[]) => void> = {
       basic: setBasicTopics,
@@ -59,41 +57,27 @@ export default function Step2_Topics({ niche, duration, onNext, initialTopics, i
 
     setBusy(true);
     setError(null);
+    setAiFailed(false);
     try {
       setters[tab](await fetchers[tab]());
     } catch (e) {
       console.error(e);
-      if (e instanceof ApiError && e.code === "network_error") {
-        setError("Failed to reach the server. Please check your connection.");
-      } else {
-        const name = AI_OPTIONS.find(o => o.id === ai)!.label;
-        const reason = e instanceof ApiError && e.code === "invalid_ai_response"
-          ? "returned an invalid response"
-          : e instanceof ApiError && e.code === "provider_not_configured"
-            ? "is not configured on the server"
-            : isRateLimitError(e) ? "hit its quota limit" : "couldn't generate topics";
-        setFailedProviders(prev => (prev.includes(ai) ? prev : [...prev, ai]));
-        setProvider(null);
-        setError(`${name} ${reason}. Please choose another AI.`);
-      }
+      setError(describeAIError(e, ai, "generate topics"));
+      setAiFailed(isProviderError(e));
     } finally {
       setBusy(false);
     }
   };
 
-  const selectProvider = (ai: AIProvider) => {
-    setProvider(ai);
-    if (topicsByTab[activeTab].length === 0) loadTopics(activeTab, ai);
-  };
+  // Load the open tab as soon as AI mode is on - and again if the user switched
+  // to another AI after a failure (the tab is still empty then).
+  useEffect(() => {
+    if (discoveryMode === "ai" && topicsByTab[activeTab].length === 0) loadTopics(activeTab);
+  }, [discoveryMode, ai.id]);
 
   const openTab = (tab: TopicTab) => {
     setActiveTab(tab);
-    if (topicsByTab[tab].length === 0 && provider) loadTopics(tab, provider);
-  };
-
-  const resetProviders = () => {
-    setFailedProviders([]);
-    setError(null);
+    if (topicsByTab[tab].length === 0) loadTopics(tab);
   };
 
   const [customTopic, setCustomTopic] = useState("");
@@ -182,7 +166,14 @@ export default function Step2_Topics({ niche, duration, onNext, initialTopics, i
           : "Type the topic you want your video to be about."}
       />
 
-      {error && <Notice className="mb-6" onDismiss={() => setError(null)}>{error}</Notice>}
+      {error && (
+        <Notice className="mb-6" onDismiss={() => setError(null)}>
+          {error}{" "}
+          {aiFailed && (
+            <button onClick={onChangeAI} className="font-semibold underline underline-offset-2">Choose another AI</button>
+          )}
+        </Notice>
+      )}
 
       {/* Custom topic */}
       <form onSubmit={handleCustomTopicSubmit} className="flex gap-2 mb-8">
@@ -222,76 +213,10 @@ export default function Step2_Topics({ niche, duration, onNext, initialTopics, i
                 </button>
               ))}
             </div>
-            {(provider || activeTopics.length > 0) && (
-              <div className="inline-flex items-center gap-1 p-1 bg-white/70 rounded-xl border border-black/5" role="group" aria-label="AI model">
-                {AI_OPTIONS.map(option => {
-                  const failed = failedProviders.includes(option.id);
-                  // Once an AI is chosen the choice is locked; it only reopens if that AI fails.
-                  const locked = provider !== null && provider !== option.id;
-                  return (
-                    <button
-                      key={option.id}
-                      onClick={() => selectProvider(option.id)}
-                      disabled={failed || locked || isBusy}
-                      aria-pressed={provider === option.id}
-                      title={failed
-                        ? `${option.label} failed - choose another AI`
-                        : locked ? "Topics are being generated with another AI" : `Generate with ${option.label}`}
-                      className={cn(
-                        "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:cursor-not-allowed",
-                        provider === option.id ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900",
-                        locked && "opacity-40 hover:text-zinc-600",
-                        failed && "line-through opacity-40 hover:text-zinc-600"
-                      )}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <span className="chip" title="Change it from the AI button in the header">Using {ai.label}</span>
           </div>
 
-          {!provider && activeTopics.length === 0 && !isBusy ? (
-            <div className="py-8 text-center">
-              {allProvidersFailed ? (
-                <>
-                  <p className="text-sm text-zinc-600 mb-4">All AI options failed. Write your own topic above, or try the AIs again.</p>
-                  <button onClick={resetProviders} className="btn-dark inline-flex items-center gap-2">
-                    <RotateCcw className="w-4 h-4" />
-                    <span>Try again</span>
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm font-semibold text-zinc-900 mb-1">Choose an AI to generate ideas</p>
-                  <p className="text-xs text-zinc-600 mb-5">Topics are generated only by the AI you pick.</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 max-w-xl mx-auto">
-                    {AI_OPTIONS.map(option => {
-                      const failed = failedProviders.includes(option.id);
-                      return (
-                        <button
-                          key={option.id}
-                          onClick={() => selectProvider(option.id)}
-                          disabled={failed}
-                          className={cn(
-                            "px-4 py-3 rounded-xl text-sm font-semibold border transition-all inline-flex items-center justify-center gap-2",
-                            failed
-                              ? "bg-white/40 text-zinc-400 border-transparent cursor-not-allowed"
-                              : "bg-white/80 text-zinc-800 border-transparent hover:border-[var(--color-box-border)] hover:bg-white hover:shadow-sm"
-                          )}
-                        >
-                          <Sparkles className="w-4 h-4" />
-                          <span>{option.label}</span>
-                          {failed && <span className="text-[10px] font-medium uppercase tracking-wide">Unavailable</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-          ) : isGenerating ? (
+          {isGenerating ? (
             <div className="py-16 flex justify-center">
               <LoadingDonut label={activeTab === "trending" ? "Reading live trends..." : "Generating ideas..."} />
             </div>
@@ -320,9 +245,13 @@ export default function Step2_Topics({ niche, duration, onNext, initialTopics, i
               })}
             </div>
           ) : (
-            <p className="py-12 text-center text-sm text-zinc-500">
-              No ideas yet. Click an AI above to generate them.
-            </p>
+            <div className="py-12 text-center">
+              <p className="text-sm text-zinc-500 mb-4">No ideas yet.</p>
+              <button onClick={() => loadTopics(activeTab)} disabled={isBusy} className="btn-dark inline-flex items-center gap-2">
+                <RotateCcw className="w-4 h-4" />
+                <span>Try again</span>
+              </button>
+            </div>
           )}
         </div>
       )}

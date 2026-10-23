@@ -3,6 +3,7 @@ Feature services - one module per step of the video pipeline.
 
 | Step | Service                | Module       |
 |------|------------------------|--------------|
+| 0    | AIOptionsService       | ai_options.py |
 | 2    | TopicService           | topics.py    |
 | 2    | ResearchService        | research.py  |
 | 3    | ScriptService          | scripts.py   |
@@ -14,6 +15,7 @@ Feature services - one module per step of the video pipeline.
 | 8    | ProjectExporter        | project_export.py |
 """
 
+from core.services.ai_options import AIOptionsService
 from core.services.audio import TextToSpeechService
 from core.services.export import ExportFormat, export_script
 from core.services.images import ImageService
@@ -25,6 +27,7 @@ from core.services.topics import TopicService
 from core.services.video import VideoResult, VideoService
 
 __all__ = [
+    "AIOptionsService",
     "ExportFormat",
     "ImageService",
     "ProjectData",

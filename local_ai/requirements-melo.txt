@@ -1,0 +1,7 @@
+# MeloTTS venv (Python 3.10: local_ai/.venv-melo). MeloTTS pins transformers==4.27.4
+# and librosa==0.9.1, which clash with the main worker, so it lives on its own.
+# Install PyTorch first (LOCAL_SETUP.md, step 6), then:
+#   pip install -r local_ai/requirements-melo.txt
+numpy<2
+nltk>=3.8
+git+https://github.com/myshell-ai/MeloTTS.git

@@ -58,6 +58,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_exception_handlers(app)
     app.include_router(api_router)
 
+    # Locally generated narration, clips and final videos (see core/local/media.py).
+    settings.media_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/api/media", StaticFiles(directory=settings.media_dir), name="media")
+
     # In production the built React app is served by FastAPI itself, so the
     # whole product runs as a single process on a single port.
     # Mounted last so it never shadows /api routes or the /docs pages.
